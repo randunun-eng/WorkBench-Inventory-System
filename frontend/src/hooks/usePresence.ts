@@ -13,6 +13,8 @@ export interface ChatMessage {
     senderName: string;
     content: string;
     timestamp: number;
+    type?: 'TEXT' | 'IMAGE';
+    product?: any;
 }
 
 export const usePresence = () => {
@@ -45,9 +47,11 @@ export const usePresence = () => {
         ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
+                console.log('Presence Message:', data); // Debug log
 
                 switch (data.type) {
                     case 'ONLINE_USERS':
+                        console.log('Setting online users:', data.users); // Debug log
                         setOnlineUsers(data.users);
                         break;
                     case 'PRESENCE':
@@ -105,9 +109,14 @@ export const usePresence = () => {
         };
     }, [connect]);
 
-    const sendMessage = (content: string) => {
+    const sendMessage = (content: string, type: 'TEXT' | 'IMAGE' = 'TEXT', product?: any) => {
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({ type: 'CHAT_MESSAGE', content }));
+            wsRef.current.send(JSON.stringify({
+                type: 'CHAT_MESSAGE',
+                content,
+                messageType: type,
+                product
+            }));
         }
     };
 

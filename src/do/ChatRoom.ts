@@ -29,19 +29,32 @@ export class ChatRoom extends DurableObject {
     }
 
     async fetch(request: Request) {
+        const url = new URL(request.url)
+
+        // Handle Internal Notifications (POST)
+        if (request.method === 'POST') {
+            const data = await request.json() as any
+            if (data.type === 'GUEST_NOTIFICATION') {
+                // Broadcast this notification to everyone in this room (The Shop Owner)
+                this.broadcast(JSON.stringify(data))
+                return new Response('OK')
+            }
+            return new Response('Unknown type', { status: 400 })
+        }
+
         const upgradeHeader = request.headers.get('Upgrade')
         if (!upgradeHeader || upgradeHeader !== 'websocket') {
             return new Response('Expected Upgrade: websocket', { status: 426 })
         }
 
-        const url = new URL(request.url)
         const userId = url.searchParams.get('userId') || 'anonymous'
         const username = url.searchParams.get('username') || 'Anonymous'
+        const roomId = url.searchParams.get('roomId') || ''
 
         const webSocketPair = new WebSocketPair()
         const [client, server] = Object.values(webSocketPair)
 
-        this.handleSession(server, { userId, username })
+        this.handleSession(server, { userId, username }, roomId)
 
         return new Response(null, {
             status: 101,
@@ -49,14 +62,14 @@ export class ChatRoom extends DurableObject {
         })
     }
 
-    async handleSession(webSocket: WebSocket, userData: WebSocketData) {
+    async handleSession(webSocket: WebSocket, userData: WebSocketData, roomId: string) {
         this.sessions.set(webSocket, userData)
         webSocket.accept()
 
         // Send history on join
         await this.cleanup()
         const history = await this.ctx.storage.list({ limit: 50, reverse: true })
-        const messages = Array.from(history.values())
+        const messages = Array.from(history.values()).reverse()
         webSocket.send(JSON.stringify({ type: 'HISTORY', messages }))
 
         webSocket.addEventListener('message', async (event) => {
@@ -80,6 +93,41 @@ export class ChatRoom extends DurableObject {
 
                     // Broadcast
                     this.broadcast(JSON.stringify({ type: 'MESSAGE', message }))
+
+                    // NOTIFICATION LOGIC
+                    // If this is a Guest Room (format: chat-shopSlug-guestId), notify the Shop Lobby
+                    // Regex: chat-(shop-slug)-(guest-id)
+                    // But shop slug can contain dashes.
+                    // Convention: guest IDs start with 'guest-'
+                    // So we look for the last occurrence of '-guest-'?
+                    // Or simpler: The Public Frontend constructs the ID.
+                    // Let's assume standard format: chat-<shop_slug>-<guest_id>
+                    // where guest_id starts with 'guest-'
+
+                    if (roomId.includes('-guest-')) {
+                        const guestIndex = roomId.lastIndexOf('-guest-');
+                        if (guestIndex > 0) {
+                            const shopSlug = roomId.substring(5, guestIndex); // remove 'chat-' prefix
+                            const lobbyId = `chat-${shopSlug}`;
+
+                            // Send notification to Lobby
+                            const id = this.env.CHAT_ROOM.idFromName(lobbyId);
+                            const stub = this.env.CHAT_ROOM.get(id);
+
+                            await stub.fetch(new Request('https://internal/notify', {
+                                method: 'POST',
+                                body: JSON.stringify({
+                                    type: 'GUEST_NOTIFICATION',
+                                    roomId: roomId,
+                                    guestId: userData.userId,
+                                    guestName: userData.username,
+                                    lastMessage: message.content,
+                                    timestamp: message.timestamp,
+                                    product: message.product
+                                })
+                            }));
+                        }
+                    }
                 }
 
             } catch (err) {

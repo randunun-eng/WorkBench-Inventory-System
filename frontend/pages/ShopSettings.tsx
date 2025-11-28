@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api';
-import { Save, Lock, MapPin, Phone, Store } from 'lucide-react';
+import { Save, Lock, MapPin, Phone, Store, Upload, Image as ImageIcon } from 'lucide-react';
 
 const ShopSettings: React.FC = () => {
     const [loading, setLoading] = useState(true);
@@ -10,25 +10,22 @@ const ShopSettings: React.FC = () => {
         phone: '',
         address: '',
         lat: '',
-        lng: ''
+        lng: '',
+        logo_r2_key: ''
     });
     const [passwordData, setPasswordData] = useState({
         newPassword: '',
         confirmPassword: ''
     });
     const [message, setMessage] = useState({ type: '', text: '' });
+    const [isUploading, setIsUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         const fetchShop = async () => {
             const userStr = localStorage.getItem('user');
             if (!userStr) return;
             const user = JSON.parse(userStr);
-
-            // We need to fetch the full shop details
-            // Since we don't have a direct "get my profile" endpoint that returns everything structured perfectly for this form,
-            // we'll use getShopBySlug if available, or just rely on what we have.
-            // Actually, getShopBySlug returns public info. We might want a private "get my profile" endpoint later.
-            // For now, let's use getShopBySlug as it contains the location and contact info we want to edit.
 
             const data = await api.getShopBySlug(user.shop_slug);
             if (data && data.shop) {
@@ -38,7 +35,8 @@ const ShopSettings: React.FC = () => {
                     phone: data.shop.public_contact_info?.phone || '',
                     address: data.shop.location_address || '',
                     lat: data.shop.location_lat?.toString() || '',
-                    lng: data.shop.location_lng?.toString() || ''
+                    lng: data.shop.location_lng?.toString() || '',
+                    logo_r2_key: data.shop.logo_r2_key || ''
                 });
             }
             setLoading(false);
@@ -58,11 +56,29 @@ const ShopSettings: React.FC = () => {
                     address: formData.address,
                     lat: parseFloat(formData.lat) || null,
                     lng: parseFloat(formData.lng) || null
-                }
+                },
+                logo_r2_key: formData.logo_r2_key
             });
             setMessage({ type: 'success', text: 'Profile updated successfully' });
         } catch (err) {
             setMessage({ type: 'error', text: 'Failed to update profile' });
+        }
+    };
+
+    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploading(true);
+        try {
+            const { key } = await api.uploadImage(file, false); // Public upload
+            setFormData(prev => ({ ...prev, logo_r2_key: key }));
+            setMessage({ type: 'success', text: 'Logo uploaded successfully. Click Save to apply.' });
+        } catch (error) {
+            console.error('Failed to upload logo', error);
+            setMessage({ type: 'error', text: 'Failed to upload logo' });
+        } finally {
+            setIsUploading(false);
         }
     };
 
@@ -106,6 +122,43 @@ const ShopSettings: React.FC = () => {
                         Profile Details
                     </h2>
                     <form onSubmit={handleProfileUpdate} className="space-y-4">
+                        {/* Logo Upload */}
+                        <div className="flex items-center gap-4 mb-6">
+                            <div className="w-20 h-20 rounded-full bg-gray-100 border border-gray-200 overflow-hidden flex items-center justify-center relative group">
+                                {formData.logo_r2_key ? (
+                                    <img
+                                        src={api.getImageUrl(formData.logo_r2_key)}
+                                        alt="Shop Logo"
+                                        className="w-full h-full object-cover"
+                                    />
+                                ) : (
+                                    <ImageIcon className="text-gray-400" size={32} />
+                                )}
+                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                    <Upload className="text-white" size={20} />
+                                </div>
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    onChange={handleLogoUpload}
+                                    className="absolute inset-0 opacity-0 cursor-pointer"
+                                    accept="image/*"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Shop Logo</label>
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={isUploading}
+                                    className="text-sm text-brand-blue hover:underline disabled:opacity-50"
+                                >
+                                    {isUploading ? 'Uploading...' : 'Change Logo'}
+                                </button>
+                                <p className="text-xs text-gray-500 mt-1">Recommended: Square image, 200x200px</p>
+                            </div>
+                        </div>
+
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Shop Name</label>
                             <input
@@ -150,6 +203,7 @@ const ShopSettings: React.FC = () => {
                                     value={formData.lat}
                                     onChange={e => setFormData({ ...formData, lat: e.target.value })}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue"
+                                    rows={3}
                                 />
                             </div>
                             <div>
@@ -159,6 +213,7 @@ const ShopSettings: React.FC = () => {
                                     value={formData.lng}
                                     onChange={e => setFormData({ ...formData, lng: e.target.value })}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue"
+                                    rows={3}
                                 />
                             </div>
                         </div>

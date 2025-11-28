@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Paperclip, Smile } from 'lucide-react';
+import { X, Send, Paperclip, Smile, Image as ImageIcon } from 'lucide-react';
 import { ShopProfile, Product } from '../types';
+import { api } from '../api';
 
 interface ChatSidebarProps {
     isOpen: boolean;
@@ -15,6 +16,7 @@ interface Message {
     senderName: string;
     content: string;
     timestamp: number;
+    type?: 'TEXT' | 'IMAGE';
     product?: {
         id: string;
         name: string;
@@ -27,8 +29,10 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onClose, shop, produc
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
     const [isConnected, setIsConnected] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const wsRef = useRef<WebSocket | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Generate or retrieve a guest ID
     const getGuestId = () => {
@@ -62,8 +66,8 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onClose, shop, produc
 
         const connect = () => {
             const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://workbench-inventory.randunun.workers.dev';
-            // Use shop slug as room ID
-            const roomId = `chat-${shop.slug}`;
+            // Use shop slug + guest ID as room ID for private chat
+            const roomId = `chat-${shop.slug}-${guestId}`;
             const wsUrl = new URL(`${baseUrl}/api/chat/room/${roomId}`);
             wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:';
             wsUrl.searchParams.set('guestId', guestId);
@@ -106,19 +110,14 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onClose, shop, produc
         };
     }, [isOpen, shop.slug, guestId]);
 
-    const handleSend = () => {
-        if (!inputText.trim() || !wsRef.current) return;
+    const handleSend = (content: string = inputText, type: 'TEXT' | 'IMAGE' = 'TEXT') => {
+        if (!content.trim() || !wsRef.current) return;
 
         const payload: any = {
             type: 'MESSAGE',
-            content: inputText,
-            messageType: 'TEXT'
+            content: content,
+            messageType: type
         };
-
-        // Attach product context if this is the FIRST message or explicitly requested
-        // For simplicity, let's attach it if available and it's a new conversation or user wants to inquire
-        // Actually, let's just attach it to every message if a product is selected in context, 
-        // OR better: The UI should probably show "Inquiring about: [Product]"
 
         if (product) {
             payload.product = {
@@ -130,10 +129,42 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onClose, shop, produc
         }
 
         wsRef.current.send(JSON.stringify(payload));
-        setInputText('');
+        if (type === 'TEXT') setInputText('');
+    };
+
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploading(true);
+        try {
+            const { key } = await api.uploadImage(file, false); // Public upload
+            handleSend(key, 'IMAGE');
+        } catch (error) {
+            console.error('Failed to upload file', error);
+            alert('Failed to upload file');
+        } finally {
+            setIsUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
     };
 
     if (!isOpen) return null;
+
+    // Helper to render message content
+    const renderContent = (msg: Message) => {
+        if (msg.type === 'IMAGE' || msg.content.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+            const imageUrl = msg.content.startsWith('http')
+                ? msg.content
+                : api.getImageUrl(msg.content);
+            return (
+                <div className="mt-1">
+                    <img src={imageUrl} alt="Shared image" className="max-w-xs rounded-lg border border-gray-200" />
+                </div>
+            );
+        }
+        return <p>{msg.content}</p>;
+    };
 
     return (
         <div className="fixed inset-y-0 left-0 z-50 w-full sm:w-96 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col border-r border-gray-200">
@@ -141,8 +172,12 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onClose, shop, produc
             <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-brand-dark text-white">
                 <div className="flex items-center gap-3">
                     <div className="relative">
-                        <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-lg font-bold">
-                            {shop.name.charAt(0)}
+                        <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-lg font-bold overflow-hidden border border-white/20">
+                            {shop.logo_r2_key ? (
+                                <img src={api.getImageUrl(shop.logo_r2_key)} alt={shop.name} className="w-full h-full object-cover" />
+                            ) : (
+                                shop.name.charAt(0)
+                            )}
                         </div>
                         <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-brand-dark ${isConnected ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
                     </div>
@@ -198,7 +233,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onClose, shop, produc
                                     </div>
                                 )}
 
-                                <p>{msg.content}</p>
+                                {renderContent(msg)}
                                 <span className={`text-[10px] block mt-1 ${isMe ? 'text-blue-100' : 'text-gray-400'
                                     }`}>
                                     {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -213,7 +248,18 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onClose, shop, produc
             {/* Input */}
             <div className="p-4 bg-white border-t border-gray-100">
                 <div className="flex items-center gap-2 bg-gray-50 rounded-full px-4 py-2 border border-gray-200 focus-within:border-brand-blue focus-within:ring-1 focus-within:ring-brand-blue transition-all">
-                    <button className="text-gray-400 hover:text-gray-600">
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileSelect}
+                        className="hidden"
+                        accept="image/*"
+                    />
+                    <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
+                        className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                    >
                         <Paperclip size={18} />
                     </button>
                     <input
@@ -221,15 +267,16 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onClose, shop, produc
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}
                         onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                        placeholder="Type a message..."
+                        placeholder={isUploading ? "Uploading..." : "Type a message..."}
                         className="flex-1 bg-transparent border-none focus:ring-0 text-sm placeholder-gray-400"
+                        disabled={isUploading}
                     />
                     <button className="text-gray-400 hover:text-gray-600">
                         <Smile size={18} />
                     </button>
                     <button
-                        onClick={handleSend}
-                        disabled={!inputText.trim() || !isConnected}
+                        onClick={() => handleSend()}
+                        disabled={!inputText.trim() || !isConnected || isUploading}
                         className={`p-2 rounded-full transition-all ${inputText.trim() && isConnected
                             ? 'bg-brand-blue text-white shadow-md hover:bg-blue-600'
                             : 'bg-gray-200 text-gray-400 cursor-not-allowed'

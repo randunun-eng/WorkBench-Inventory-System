@@ -45,6 +45,7 @@ chat.get('/room/:roomId', async (c) => {
     const url = new URL(c.req.url)
     url.searchParams.set('userId', userId)
     url.searchParams.set('username', username)
+    url.searchParams.set('roomId', roomId)
 
     const newReq = new Request(url.toString(), c.req.raw)
     return stub.fetch(newReq)

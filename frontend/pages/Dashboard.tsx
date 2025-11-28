@@ -14,6 +14,7 @@ import VisionTool from '../src/pages/dashboard/VisionTool';
 import AdminDashboard from './AdminDashboard';
 import ShopSettings from './ShopSettings';
 import { api } from '../api';
+import { useChatRoom } from '../src/hooks/useChatRoom';
 
 interface InventoryItem {
   id: string;
@@ -95,6 +96,97 @@ const Dashboard: React.FC = () => {
   const token = localStorage.getItem('auth_token');
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isAdmin = user.email?.toLowerCase() === 'randunun@gmail.com';
+
+  // Global Chat Subscription
+  const myShopRoomId = user.shop_slug ? `chat-${user.shop_slug}` : null;
+  const { messages: myShopMessages, sendMessage: myShopSendMessage, notifications, isHistoryLoaded } = useChatRoom(myShopRoomId);
+
+  // Guest Chats Management
+  const [guestChats, setGuestChats] = useState<any[]>(() => {
+    const saved = localStorage.getItem('guest_chats');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Unread Logic
+  const [hasUnreadMyShop, setHasUnreadMyShop] = useState(false);
+  const prevMessageCountRef = React.useRef(0);
+
+  const playNotificationSound = () => {
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime); // A5
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1); // Drop to A4
+
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+
+      osc.start();
+      osc.stop(ctx.currentTime + 0.1);
+    } catch (e) {
+      console.error('Audio play failed', e);
+    }
+  };
+
+  // Handle Guest Notifications
+  useEffect(() => {
+    if (notifications.length > 0) {
+      const latest = notifications[notifications.length - 1];
+      setGuestChats(prev => {
+        const exists = prev.find(c => c.roomId === latest.roomId);
+        let updated;
+        if (exists) {
+          updated = prev.map(c => c.roomId === latest.roomId ? { ...c, lastMessage: latest.lastMessage, timestamp: latest.timestamp, hasUnread: true } : c);
+        } else {
+          updated = [...prev, { ...latest, hasUnread: true }];
+        }
+        localStorage.setItem('guest_chats', JSON.stringify(updated));
+        return updated;
+      });
+
+      // Only play sound if we are NOT in the chat view or if the chat view is active but looking at a different room
+      // But since this is global, we just play it. The Chat component might also play it? 
+      // No, we will remove logic from Chat component.
+      playNotificationSound();
+    }
+  }, [notifications]);
+
+  // Handle My Shop Messages (Unread)
+  useEffect(() => {
+    // If we are in Chat view AND looking at My Shop, we don't mark as unread
+    // But we don't know the active room of the Chat component here easily unless we lift that state too.
+    // For now, let's just track "new messages" globally.
+
+    if (isHistoryLoaded) {
+      const currentCount = myShopMessages.length;
+      const prevCount = prevMessageCountRef.current;
+
+      if (currentCount > prevCount) {
+        // If we are NOT in chat view, mark unread
+        if (activeView !== 'chat') {
+          setHasUnreadMyShop(true);
+          playNotificationSound();
+        }
+      }
+      prevMessageCountRef.current = currentCount;
+    } else {
+      prevMessageCountRef.current = myShopMessages.length;
+    }
+  }, [myShopMessages.length, isHistoryLoaded, activeView]);
+
+  // Clear unread when entering chat (simplified)
+  // Ideally, Chat component tells us when a room is opened.
+  // For now, if user clicks "Chat", we can't clear specific room unread yet.
+  // We will pass setGuestChats and setHasUnreadMyShop to Chat component.
 
   useEffect(() => {
     if (!token) {
@@ -456,9 +548,14 @@ const Dashboard: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveView('chat')}
-            className={`w-full text-left px-4 py-2 rounded-md flex items-center gap-3 ${activeView === 'chat' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+            className={`w-full text-left px-4 py-2 rounded-md flex items-center gap-3 justify-between ${activeView === 'chat' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
           >
-            <MessageSquare size={20} /> Chat
+            <div className="flex items-center gap-3">
+              <MessageSquare size={20} /> Chat
+            </div>
+            {(hasUnreadMyShop || guestChats.some(c => c.hasUnread)) && (
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+            )}
           </button>
           <button
             onClick={() => setActiveView('chatbot')}
@@ -517,7 +614,14 @@ const Dashboard: React.FC = () => {
                   {activeView === 'inventory' && 'Inventory Dashboard'}
                   {activeView === 'categories' && 'Category Management'}
                   {activeView === 'chat' && (
-                    <Chat />
+                    <Chat
+                      globalMyShopMessages={myShopMessages}
+                      globalGuestChats={guestChats}
+                      setGlobalGuestChats={setGuestChats}
+                      setGlobalHasUnreadMyShop={setHasUnreadMyShop}
+                      myShopRoomId={myShopRoomId}
+                      myShopSendMessage={myShopSendMessage}
+                    />
                   )}
 
                   {activeView === 'network' && (

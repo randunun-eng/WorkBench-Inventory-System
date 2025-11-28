@@ -2,13 +2,24 @@ import { Hono } from 'hono'
 
 const shop = new Hono<{ Bindings: any }>()
 
+// Get All Active Shops
+shop.get('/', async (c) => {
+  const shops = await c.env.DB.prepare(`
+    SELECT id, shop_name, shop_slug, logo_r2_key
+    FROM users 
+    WHERE is_active = 1 AND is_approved = 1
+  `).all()
+
+  return c.json(shops.results)
+})
+
 // Get Shop by Slug
 shop.get('/:slug', async (c) => {
   const slug = c.req.param('slug')
 
   // Fetch Shop Details
   const user = await c.env.DB.prepare(`
-    SELECT id, shop_name, shop_slug, public_contact_info, location_lat, location_lng, location_address
+    SELECT id, shop_name, shop_slug, public_contact_info, location_lat, location_lng, location_address, logo_r2_key
     FROM users 
     WHERE shop_slug = ?
   `).bind(slug).first()
@@ -77,7 +88,7 @@ shop.put('/profile', async (c) => {
   const user = await verifyToken(token)
   if (!user) return c.json({ error: 'Invalid token' }, 401)
 
-  const { shop_name, contact_info, location, password } = await c.req.json()
+  const { shop_name, contact_info, location, password, logo_r2_key } = await c.req.json()
   const updates: any[] = []
   const values: any[] = []
 
@@ -104,6 +115,11 @@ shop.put('/profile', async (c) => {
       updates.push('location_address = ?')
       values.push(location.address)
     }
+  }
+
+  if (logo_r2_key) {
+    updates.push('logo_r2_key = ?')
+    values.push(logo_r2_key)
   }
 
   if (password) {

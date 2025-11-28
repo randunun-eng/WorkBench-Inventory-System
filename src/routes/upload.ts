@@ -6,9 +6,10 @@ import { v4 as uuidv4 } from 'uuid'
 
 const upload = new Hono<{ Bindings: any, Variables: { user: any } }>()
 
-upload.use('*', authMiddleware)
+// Remove global auth middleware
+// upload.use('*', authMiddleware)
 
-upload.post('/presigned-url', async (c) => {
+upload.post('/presigned-url', authMiddleware, async (c) => {
     const user = c.get('user')
     const { contentType, isPrivate } = await c.req.json()
 
@@ -48,7 +49,7 @@ upload.post('/presigned-url', async (c) => {
     }
 })
 
-upload.post('/proxy', async (c) => {
+upload.post('/proxy', authMiddleware, async (c) => {
     const user = c.get('user')
     const body = await c.req.parseBody()
     const file = body['file']
@@ -138,6 +139,31 @@ Return ONLY valid JSON, no markdown, no explanation.`
         return c.json({ key, extractedSpecs })
     } catch (e: any) {
         console.error('Proxy upload error:', e)
+        return c.json({ error: 'Failed to upload file', details: e.message }, 500)
+    }
+})
+
+// Public Guest Upload
+upload.post('/guest', async (c) => {
+    const body = await c.req.parseBody()
+    const file = body['file']
+
+    if (!file || !(file instanceof File)) {
+        return c.json({ error: 'File required' }, 400)
+    }
+
+    const bucket = c.env.PUBLIC_BUCKET
+    const key = `guests/${uuidv4()}`
+
+    try {
+        await bucket.put(key, file.stream(), {
+            httpMetadata: {
+                contentType: file.type,
+            }
+        })
+        return c.json({ key })
+    } catch (e: any) {
+        console.error('Guest upload error:', e)
         return c.json({ error: 'Failed to upload file', details: e.message }, 500)
     }
 })

@@ -54,7 +54,7 @@ auth.post('/signup', async (c) => {
             console.log('RESEND_API_KEY not configured - email notification skipped');
         }
 
-        const token = await generateToken({ uid: id, email })
+        const token = await generateToken({ uid: id, email, shop_name, shop_slug })
         return c.json({ token, user: { id, email, shop_name, shop_slug, is_approved } })
     } catch (e: any) {
         return c.json({ error: 'User already exists or database error', details: e.message }, 400)
@@ -81,7 +81,12 @@ auth.post('/login', async (c) => {
         return c.json({ error: 'Account pending approval. Please wait for admin verification.' }, 403)
     }
 
-    const token = await generateToken({ uid: user.id, email: user.email })
+    const token = await generateToken({
+        uid: user.id,
+        email: user.email,
+        shop_name: user.shop_name,
+        shop_slug: user.shop_slug
+    })
     return c.json({ token, user })
 })
 

@@ -6,7 +6,7 @@ import { ChatMessage } from '../../hooks/usePresence';
 interface ChatWindowProps {
     roomId: string;
     messages: ChatMessage[];
-    onSendMessage: (content: string) => void;
+    onSendMessage: (content: string, type?: 'TEXT' | 'IMAGE', product?: any) => void;
 }
 
 const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, messages, onSendMessage }) => {
@@ -16,8 +16,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, messages, onSendMessage
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Simple user check
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const currentUserId = user.id;
+    const userStr = localStorage.getItem('user');
+    const user = userStr ? JSON.parse(userStr) : {};
+    const currentUserId = user.uid || user.id; // Support both uid and id
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -30,7 +31,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, messages, onSendMessage
     const handleSend = (e: React.FormEvent) => {
         e.preventDefault();
         if (input.trim()) {
-            onSendMessage(input);
+            onSendMessage(input, 'TEXT');
             setInput('');
         }
     };
@@ -42,11 +43,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, messages, onSendMessage
         setIsUploading(true);
         try {
             const { key } = await api.uploadImage(file, false); // Public upload for chat
-            // For now, we just send the key. The backend/frontend should handle type detection or we send a structured message.
-            // Since sendMessage only takes string, we might need to prefix or change protocol.
-            // For MVP, let's assume text. If we want rich media, we need to update sendMessage signature or protocol.
-            // Let's just send the URL/Key for now.
-            onSendMessage(key);
+            onSendMessage(key, 'IMAGE');
         } catch (error) {
             console.error('Failed to upload file', error);
             alert('Failed to upload file');
@@ -61,15 +58,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, messages, onSendMessage
     };
 
     const renderMessageContent = (msg: ChatMessage) => {
-        // Simple heuristic for images/files based on content string
-        // In a real app, message should have a 'type' field.
-        // For now, check if it looks like an R2 key or URL
-        const isImage = msg.content.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-
-        if (isImage) {
+        if (msg.type === 'IMAGE' || msg.content.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
             const imageUrl = msg.content.startsWith('http')
                 ? msg.content
-                : `/api/images/${msg.content}`;
+                : api.getImageUrl(msg.content);
 
             return (
                 <div className="mt-1">
@@ -133,6 +125,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, messages, onSendMessage
                         ref={fileInputRef}
                         onChange={handleFileSelect}
                         className="hidden"
+                        accept="image/*"
                     />
                     <button
                         type="button"

@@ -54,25 +54,9 @@ export const api = {
   // Get all shops
   async getAllShops(): Promise<APIShop[]> {
     try {
-      // Get all products and extract unique shops
-      const products = await this.searchProducts('');
-      const shopsMap = new Map<string, APIShop>();
-
-      products.forEach(product => {
-        if (!shopsMap.has(product.shop_slug)) {
-          shopsMap.set(product.shop_slug, {
-            id: product.shop_slug,
-            shop_name: product.shop_name,
-            shop_slug: product.shop_slug,
-            public_contact_info: null,
-            location_lat: null,
-            location_lng: null,
-            location_address: null,
-          });
-        }
-      });
-
-      return Array.from(shopsMap.values());
+      const response = await fetch(`${API_BASE_URL}/api/shop`);
+      if (!response.ok) throw new Error('Failed to fetch shops');
+      return await response.json();
     } catch (error) {
       console.error('Error fetching shops:', error);
       return [];
@@ -246,31 +230,29 @@ export const api = {
   },
 
   async uploadImage(file: File, isPrivate: boolean = false): Promise<{ key: string; url: string }> {
-    if (!this.token) throw new Error('Not authenticated');
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('isPrivate', isPrivate.toString());
 
-    // 1. Get Presigned URL
-    const presignedResponse = await fetch(`${API_BASE_URL}/api/upload/presigned-url`, {
+    let endpoint = `${API_BASE_URL}/api/upload/proxy`;
+    const headers: any = {};
+
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    } else {
+      // Guest Upload
+      endpoint = `${API_BASE_URL}/api/upload/guest`;
+    }
+
+    const response = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.token}`
-      },
-      body: JSON.stringify({ contentType: file.type, isPrivate })
+      headers,
+      body: formData
     });
 
-    if (!presignedResponse.ok) throw new Error('Failed to get upload URL');
-    const { url, key } = await presignedResponse.json();
-
-    // 2. Upload File to R2
-    const uploadResponse = await fetch(url, {
-      method: 'PUT',
-      headers: { 'Content-Type': file.type },
-      body: file
-    });
-
-    if (!uploadResponse.ok) throw new Error('Failed to upload file');
-
-    return { key, url: url.split('?')[0] }; // Return clean URL (though R2 public access might be different)
+    if (!response.ok) throw new Error('Failed to upload file');
+    const data = await response.json();
+    return { key: data.key, url: this.getImageUrl(data.key) };
   },
 
   async searchNetwork(query: string): Promise<any[]> {
