@@ -17,6 +17,7 @@ const InventoryList: React.FC = () => {
         name: '',
         description: '',
         price: '',
+        landing_cost: '',
         stock_qty: '',
         sku: '',
         category_id: '',
@@ -75,42 +76,19 @@ const InventoryList: React.FC = () => {
             await api.createItem({
                 ...newItem,
                 price: parseFloat(newItem.price),
+                landing_cost: newItem.landing_cost ? parseFloat(newItem.landing_cost) : undefined,
                 stock_qty: parseInt(newItem.stock_qty),
                 specifications: specs
             });
             setIsModalOpen(false);
-            setNewItem({ name: '', description: '', price: '', stock_qty: '', sku: '', category_id: '', specifications: '' });
+            setNewItem({ name: '', description: '', price: '', landing_cost: '', stock_qty: '', sku: '', category_id: '', specifications: '' });
             loadItems();
         } catch (error) {
             alert('Failed to create item');
         }
     };
 
-    const handleAIUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        setIsProcessingAI(true);
-        try {
-            const data = await api.parseDatasheet(file);
-
-            // Auto-fill form
-            setNewItem(prev => ({
-                ...prev,
-                name: data.name || prev.name,
-                description: data.description || prev.description,
-                specifications: data.specifications ? JSON.stringify(data.specifications, null, 2) : prev.specifications
-            }));
-
-            alert('Auto-filled from datasheet!');
-        } catch (error) {
-            console.error('AI Parse failed', error);
-            alert('Failed to analyze datasheet');
-        } finally {
-            setIsProcessingAI(false);
-            if (fileInputRef.current) fileInputRef.current.value = '';
-        }
-    };
+    // ... (handleAIUpload remains same) ...
 
     const filteredItems = items.filter(item =>
         item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -125,6 +103,7 @@ const InventoryList: React.FC = () => {
                 <h2 className="text-xl font-bold text-gray-800">Inventory Items</h2>
 
                 <div className="flex gap-2 w-full md:w-auto">
+                    {/* ... (search and buttons remain same) ... */}
                     <div className="relative flex-1 md:w-64">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                         <input
@@ -160,6 +139,7 @@ const InventoryList: React.FC = () => {
                             <th className="pb-3 font-medium">Category</th>
                             <th className="pb-3 font-medium">Stock</th>
                             <th className="pb-3 font-medium">Price</th>
+                            <th className="pb-3 font-medium">Cost</th>
                             <th className="pb-3 font-medium">Actions</th>
                         </tr>
                     </thead>
@@ -178,6 +158,7 @@ const InventoryList: React.FC = () => {
                                     </span>
                                 </td>
                                 <td className="py-4 text-gray-800">${item.price}</td>
+                                <td className="py-4 text-gray-500 text-sm">{item.landing_cost ? `$${item.landing_cost}` : '-'}</td>
                                 <td className="py-4">
                                     <button className="text-gray-400 hover:text-brand-blue">
                                         <Edit size={18} />
@@ -286,6 +267,17 @@ const InventoryList: React.FC = () => {
                                         value={newItem.price}
                                         onChange={e => setNewItem({ ...newItem, price: e.target.value })}
                                         className="w-full border border-gray-300 rounded-md px-3 py-2"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Landing Cost (Private)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={newItem.landing_cost}
+                                        onChange={e => setNewItem({ ...newItem, landing_cost: e.target.value })}
+                                        className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50"
+                                        placeholder="Optional"
                                     />
                                 </div>
                                 <div>

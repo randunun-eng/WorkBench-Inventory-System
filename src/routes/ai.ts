@@ -61,6 +61,48 @@ async function analyzeDatasheet(datasheetKey: string, publicBucket: any, aiBindi
     }
 }
 
+ai.post('/generate-specs', async (c) => {
+    try {
+        const { productName } = await c.req.json()
+
+        if (!productName) {
+            return c.json({ error: 'Product name is required' }, 400)
+        }
+
+        const systemPrompt = `
+        You are a technical specification generator for electronic components.
+        Your job is to generate a JSON object containing technical specifications for the given product name.
+        
+        RULES:
+        1. Output ONLY valid JSON. No markdown, no explanations.
+        2. The JSON should be a flat object with key-value pairs.
+        3. Include common parameters like: voltage, current, power, package, type, resistance, capacitance, tolerance, etc., as applicable.
+        4. If you are unsure about a specific value, omit it. Do not guess wildly.
+        5. Example Output: { "voltage": "600V", "current": "50A", "package": "TO-247", "type": "IGBT" }
+        `
+
+        const aiResponse = await c.env.AI.run('@cf/meta/llama-3-8b-instruct', {
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `Generate technical specifications for: ${productName}` }
+            ]
+        })
+
+        let content = aiResponse.response
+        // Extract JSON if wrapped in markdown
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            content = jsonMatch[0];
+        }
+
+        return c.json({ specifications: JSON.parse(content) })
+
+    } catch (e: any) {
+        console.error('Spec generation error:', e)
+        return c.json({ error: 'Failed to generate specifications', details: e.message }, 500)
+    }
+}, authMiddleware)
+
 ai.post('/ocr', async (c) => {
     return c.json({ error: 'OCR requires authentication' }, 401)
 }, authMiddleware)

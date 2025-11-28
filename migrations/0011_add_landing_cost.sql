@@ -1,0 +1,2 @@
+-- Migration: Add landing_cost to shop_inventory
+ALTER TABLE shop_inventory ADD COLUMN landing_cost REAL;

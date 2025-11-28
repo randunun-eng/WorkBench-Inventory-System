@@ -345,6 +345,22 @@ export const api = {
     return await response.json();
   },
 
+  async generateSpecs(productName: string): Promise<any> {
+    if (!this.token) throw new Error('Not authenticated');
+
+    const response = await fetch(`${API_BASE_URL}/api/ai/generate-specs`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.token}`
+      },
+      body: JSON.stringify({ productName })
+    });
+
+    if (!response.ok) throw new Error('Failed to generate specifications');
+    return await response.json();
+  },
+
   // --- Admin API ---
   async getUsers(): Promise<any[]> {
     if (!this.token) throw new Error('Not authenticated');

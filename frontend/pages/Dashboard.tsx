@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Plus, Edit, Trash2, Image, FileText, Package, DollarSign,
   Eye, EyeOff, Upload, X, Save, Search, Filter, History, TrendingUp,
-  MessageSquare, Layers, Bot, Store, LogOut, Shield, Settings
+  MessageSquare, Layers, Bot, Store, LogOut, Shield, Settings, Sparkles
 } from 'lucide-react';
 import InventoryList from '../src/pages/dashboard/InventoryList';
 import CategoryList from '../src/pages/dashboard/CategoryList';
@@ -25,6 +25,7 @@ interface InventoryItem {
   stock_qty: number;
   restock_threshold: number;
   price: number;
+  landing_cost: number;
   currency: string;
   datasheet_r2_key: string | null;
   primary_image_r2_key: string | null;
@@ -59,6 +60,7 @@ const Dashboard: React.FC = () => {
     stock_qty: '0',
     restock_threshold: '5',
     price: '',
+    landing_cost: '',
     currency: 'LKR',
     is_public: false,
     is_visible_to_network: false,
@@ -383,6 +385,7 @@ const Dashboard: React.FC = () => {
         stock_qty: parseInt(formData.stock_qty),
         restock_threshold: parseInt(formData.restock_threshold),
         price: parseFloat(formData.price) || null,
+        landing_cost: parseFloat(formData.landing_cost) || null,
         currency: formData.currency,
         is_public: formData.is_public,
         is_visible_to_network: formData.is_visible_to_network,
@@ -489,6 +492,7 @@ const Dashboard: React.FC = () => {
       stock_qty: item.stock_qty?.toString() || '0',
       restock_threshold: item.restock_threshold?.toString() || '5',
       price: item.price?.toString() || '',
+      landing_cost: item.landing_cost?.toString() || '',
       currency: item.currency || 'LKR',
       is_public: Boolean(item.is_public),
       is_visible_to_network: Boolean(item.is_visible_to_network),
@@ -809,6 +813,10 @@ const Dashboard: React.FC = () => {
                           <span className="text-gray-600">Price:</span>
                           <span className="font-medium">{item.currency} {item.price?.toFixed(2) || 'N/A'}</span>
                         </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Cost:</span>
+                          <span className="font-medium text-gray-500">{item.landing_cost ? `${item.currency} ${item.landing_cost.toFixed(2)}` : '-'}</span>
+                        </div>
                         <div className="flex gap-2 mt-3">
                           {item.is_public ? (
                             <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded flex items-center gap-1">
@@ -955,6 +963,25 @@ const Dashboard: React.FC = () => {
                 </div>
               </div>
 
+              {/* Landing Cost (Private) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Landing Cost (Private)</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <span className="text-gray-500 sm:text-sm">{formData.currency}</span>
+                  </div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.landing_cost}
+                    onChange={(e) => setFormData({ ...formData, landing_cost: e.target.value })}
+                    className="w-full pl-12 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-brand-blue bg-gray-50"
+                    placeholder="0.00"
+                  />
+                </div>
+                <p className="mt-1 text-xs text-gray-500">Visible only to you, not to customers.</p>
+              </div>
+
               {/* Stock Quantity & Restock Threshold */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -980,7 +1007,36 @@ const Dashboard: React.FC = () => {
 
               {/* Specifications (JSON) */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Specifications (JSON format)</label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-sm font-medium text-gray-700">Specifications (JSON format)</label>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!formData.name) {
+                        alert('Please enter an item name first.');
+                        return;
+                      }
+                      try {
+                        setUploading(true); // Reuse uploading state for loading indicator
+                        const result = await api.generateSpecs(formData.name);
+                        setFormData(prev => ({
+                          ...prev,
+                          specifications: JSON.stringify(result.specifications, null, 2)
+                        }));
+                      } catch (error) {
+                        console.error('Spec generation failed:', error);
+                        alert('Failed to generate specifications. Please try again.');
+                      } finally {
+                        setUploading(false);
+                      }
+                    }}
+                    disabled={uploading}
+                    className="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded hover:bg-purple-100 flex items-center gap-1"
+                  >
+                    <Sparkles size={12} />
+                    {uploading ? 'Generating...' : 'Generate from Name'}
+                  </button>
+                </div>
                 <textarea
                   value={formData.specifications}
                   onChange={(e) => setFormData({ ...formData, specifications: e.target.value })}

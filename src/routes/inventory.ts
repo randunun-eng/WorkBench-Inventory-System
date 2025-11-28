@@ -17,7 +17,7 @@ inventory.post('/', async (c) => {
   const user = c.get('user')
   const {
     category_id, name, description, specifications, stock_qty, restock_threshold,
-    price, currency, is_public, is_visible_to_network, shareable_qty,
+    price, landing_cost, currency, is_public, is_visible_to_network, shareable_qty,
     primary_image_r2_key, datasheet_r2_key
   } = await c.req.json()
 
@@ -72,8 +72,8 @@ inventory.post('/', async (c) => {
     await c.env.DB.prepare(`
       INSERT INTO shop_inventory (
         id, shop_id, catalog_item_id, stock_qty, restock_threshold,
-        price, currency, is_visible_to_network, shareable_qty
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        price, landing_cost, currency, is_visible_to_network, shareable_qty
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       shopInventoryId,
       user.uid,
@@ -81,6 +81,7 @@ inventory.post('/', async (c) => {
       parseInt(stock_qty) || 0,
       parseInt(restock_threshold) || 5,
       price ? parseFloat(price) : null,
+      landing_cost ? parseFloat(landing_cost) : null,
       currency || 'LKR',
       is_visible_to_network ? 1 : 0,
       parseInt(shareable_qty) || 0
@@ -118,6 +119,7 @@ inventory.get('/', async (c) => {
       COALESCE(si.stock_qty, 0) as stock_qty,
       COALESCE(si.restock_threshold, 5) as restock_threshold,
       si.price,
+      si.landing_cost,
       si.currency,
       si.is_visible_to_network,
       si.shareable_qty,
@@ -150,6 +152,7 @@ inventory.get('/:id', async (c) => {
       COALESCE(si.stock_qty, 0) as stock_qty,
       COALESCE(si.restock_threshold, 5) as restock_threshold,
       si.price,
+      si.landing_cost,
       si.currency,
       si.is_visible_to_network,
       si.shareable_qty,
@@ -217,6 +220,7 @@ inventory.put('/:id', async (c) => {
     const safeStockQty = isNaN(Number(stock_qty)) ? undefined : Number(stock_qty)
     const safeRestockThreshold = isNaN(Number(restock_threshold)) ? undefined : Number(restock_threshold)
     const safePrice = isNaN(Number(price)) ? undefined : Number(price)
+    const safeLandingCost = isNaN(Number(updates.landing_cost)) ? undefined : Number(updates.landing_cost)
     const safeShareableQty = isNaN(Number(shareable_qty)) ? undefined : Number(shareable_qty)
 
     // Check if shop_inventory entry exists
@@ -231,6 +235,7 @@ inventory.put('/:id', async (c) => {
           stock_qty = COALESCE(?, stock_qty),
           restock_threshold = COALESCE(?, restock_threshold),
           price = COALESCE(?, price),
+          landing_cost = COALESCE(?, landing_cost),
           currency = COALESCE(?, currency),
           is_visible_to_network = COALESCE(?, is_visible_to_network),
           shareable_qty = COALESCE(?, shareable_qty),
@@ -240,6 +245,7 @@ inventory.put('/:id', async (c) => {
         safeStockQty ?? null,
         safeRestockThreshold ?? null,
         safePrice ?? null,
+        safeLandingCost ?? null,
         currency ?? null,
         is_visible_to_network !== undefined ? (is_visible_to_network ? 1 : 0) : null,
         safeShareableQty ?? null,
@@ -251,8 +257,8 @@ inventory.put('/:id', async (c) => {
       await c.env.DB.prepare(`
         INSERT INTO shop_inventory (
           id, shop_id, catalog_item_id, stock_qty, restock_threshold,
-          price, currency, is_visible_to_network, shareable_qty
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          price, landing_cost, currency, is_visible_to_network, shareable_qty
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         shopInventoryId,
         user.uid,
@@ -260,6 +266,7 @@ inventory.put('/:id', async (c) => {
         safeStockQty || 0,
         safeRestockThreshold || 5,
         safePrice || null,
+        safeLandingCost || null,
         currency || 'LKR',
         is_visible_to_network ? 1 : 0,
         safeShareableQty || 0
