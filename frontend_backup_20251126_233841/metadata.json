@@ -1,0 +1,5 @@
+{
+  "name": "WorkBench Public Storefront",
+  "description": "A public-facing retail interface for the WorkBench Inventory System, featuring an AliExpress-style layout, category navigation, and product visualization for electronic components.",
+  "requestFramePermissions": []
+}

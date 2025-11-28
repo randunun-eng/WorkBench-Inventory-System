@@ -1,0 +1,17 @@
+{
+    "compilerOptions": {
+        "target": "esnext",
+        "module": "esnext",
+        "moduleResolution": "bundler",
+        "types": [
+            "@cloudflare/workers-types/2023-07-01"
+        ],
+        "strict": true,
+        "skipLibCheck": true,
+        "lib": [
+            "esnext"
+        ],
+        "jsx": "react-jsx",
+        "jsxImportSource": "hono/jsx"
+    }
+}
