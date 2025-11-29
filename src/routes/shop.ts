@@ -20,13 +20,18 @@ shop.get('/:slug', async (c) => {
 
   // Fetch Shop Details
   const user = await c.env.DB.prepare(`
-    SELECT id, shop_name, shop_slug, public_contact_info, location_lat, location_lng, location_address, logo_r2_key
+    SELECT id, shop_name, shop_slug, public_contact_info, location_lat, location_lng, location_address, logo_r2_key, is_active, is_approved
     FROM users 
     WHERE shop_slug = ?
   `).bind(slug).first()
 
   if (!user) {
     return c.json({ error: 'Shop not found' }, 404)
+  }
+
+  // Check if shop is active and approved
+  if (!user.is_active || !user.is_approved) {
+    return c.json({ error: 'Shop is not active' }, 404)
   }
 
   // Parse JSON fields

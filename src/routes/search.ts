@@ -15,7 +15,7 @@ search.get('/product/:id', async (c) => {
         FROM catalog_items c
         LEFT JOIN shop_inventory si ON c.id = si.catalog_item_id AND si.is_visible_to_network = 1
         LEFT JOIN users u ON si.shop_id = u.id
-        WHERE c.id = ? AND c.is_public = 1
+        WHERE c.id = ? AND c.is_public = 1 AND u.is_active = 1 AND u.is_approved = 1
     `).bind(id).first()
 
     if (!product) {
@@ -44,7 +44,7 @@ search.get('/', async (c) => {
             FROM catalog_items c
             LEFT JOIN shop_inventory si ON c.id = si.catalog_item_id AND si.is_visible_to_network = 1
             LEFT JOIN users u ON si.shop_id = u.id
-            WHERE c.is_public = 1
+            WHERE c.is_public = 1 AND u.is_active = 1 AND u.is_approved = 1
             ORDER BY c.created_at DESC
             LIMIT ? OFFSET ?
         `).bind(limit || 20, offset || 0).all()
@@ -76,6 +76,7 @@ search.get('/', async (c) => {
     WHERE
       catalog_fts MATCH ?
       AND c.is_public = 1
+      AND u.is_active = 1 AND u.is_approved = 1
     ORDER BY rank
     LIMIT ? OFFSET ?
   `).bind(q, limit || 20, offset || 0).all()

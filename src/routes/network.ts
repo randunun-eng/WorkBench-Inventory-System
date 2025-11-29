@@ -35,6 +35,7 @@ network.get('/search', async (c) => {
             AND si.is_visible_to_network = 1
             AND si.shop_id != ? -- Exclude own items
             AND si.stock_qty > 0
+            AND u.is_active = 1 AND u.is_approved = 1
         ORDER BY rank
         LIMIT ? OFFSET ?
     `).bind(q, user.uid, limit || 20, offset || 0).all()
