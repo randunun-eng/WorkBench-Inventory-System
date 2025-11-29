@@ -51,20 +51,31 @@ const Chat: React.FC<ChatProps> = ({
         (activeRoomId && activeRoomId !== 'general' && !isMyRoomActive) ? activeRoomId : null
     );
 
-    // Determine which messages to show
+    // Determine which messages to show and unread count
     let currentMessages: any[] = [];
     let currentSendMessage: ((content: string, type?: 'TEXT' | 'IMAGE', product?: any) => void) | null = null;
+    let currentUnreadCount = 0;
 
     if (activeRoomId === 'general') {
         currentMessages = generalMessages;
         currentSendMessage = sendGeneralMessage;
+        currentUnreadCount = 0; // General chat doesn't track unread
     } else if (isMyRoomActive) {
         currentMessages = globalMyShopMessages;
         currentSendMessage = myShopSendMessage;
-    } else {
-        // Guest Room or Other Shop
+        // Unread count is managed in parent Dashboard component
+        currentUnreadCount = 0; // Will be cleared when viewing
+    } else if (activeRoomId && activeRoomId.includes('-guest-')) {
+        // Guest Room
         currentMessages = activeRoomMessages;
         currentSendMessage = activeRoomSendMessage;
+        const guestChat = globalGuestChats.find(c => c.roomId === activeRoomId);
+        currentUnreadCount = guestChat?.unreadCount || 0;
+    } else {
+        // DM or other room
+        currentMessages = activeRoomMessages;
+        currentSendMessage = activeRoomSendMessage;
+        currentUnreadCount = 0; // DM rooms don't track unread yet
     }
 
     // Determine Shop Name for Header
@@ -137,6 +148,7 @@ const Chat: React.FC<ChatProps> = ({
                 shopName={activeShopName}
                 messages={currentMessages}
                 onSendMessage={currentSendMessage}
+                unreadCount={currentUnreadCount}
             />
         </div>
     );

@@ -19,14 +19,26 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ activeRoomId, onSelectRoom, o
     // Debug logging
     React.useEffect(() => {
         console.log('[ChatSidebar] Online Users:', onlineUsers);
+        console.log('[ChatSidebar] Online User IDs (full):', onlineUsers.map(u => ({ id: u.userId, name: u.username })));
         console.log('[ChatSidebar] Shops:', shops);
+        console.log('[ChatSidebar] Shop IDs (full):', shops.map(s => ({ id: s.id, name: s.shop_name })));
         console.log('[ChatSidebar] My Shop Room ID:', myShopRoomId);
+
+        // Check for ID matches
+        const matches = shops.filter(shop =>
+            onlineUsers.some(user => user.userId === shop.id)
+        );
+        console.log('[ChatSidebar] Shops that match online users:', matches);
     }, [onlineUsers, shops, myShopRoomId]);
 
     const isOnline = (userId: string) => {
         if (!Array.isArray(onlineUsers)) return false;
         const online = onlineUsers.some(u => u.userId === userId && u.status === 'ONLINE');
-        console.log(`[ChatSidebar] Checking if ${userId} is online:`, online, 'Online users:', onlineUsers.map(u => u.userId));
+        if (online) {
+            console.log(`[ChatSidebar] ✓ ${userId} IS online`);
+        } else {
+            console.log(`[ChatSidebar] ✗ ${userId} NOT online. Online IDs:`, onlineUsers.map(u => u.userId));
+        }
         return online;
     };
 

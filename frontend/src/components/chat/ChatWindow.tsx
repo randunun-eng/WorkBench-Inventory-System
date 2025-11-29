@@ -8,13 +8,16 @@ interface ChatWindowProps {
     shopName?: string;
     messages: ChatMessage[];
     onSendMessage: (content: string, type?: 'TEXT' | 'IMAGE', product?: any) => void;
+    unreadCount?: number;
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, shopName, messages, onSendMessage }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, shopName, messages, onSendMessage, unreadCount = 0 }) => {
     const [input, setInput] = useState('');
     const [isUploading, setIsUploading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const unreadSeparatorRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [hasScrolledToUnread, setHasScrolledToUnread] = useState(false);
 
     // Simple user check
     const userStr = localStorage.getItem('user');
@@ -25,9 +28,30 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, shopName, messages, onS
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
+    const scrollToUnread = () => {
+        if (unreadSeparatorRef.current && !hasScrolledToUnread) {
+            unreadSeparatorRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setHasScrolledToUnread(true);
+        }
+    };
+
+    // Scroll to unread messages when opening a chat with unread
     useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
+        if (unreadCount > 0 && messages.length > 0) {
+            // Small delay to ensure DOM is rendered
+            setTimeout(scrollToUnread, 100);
+        } else {
+            scrollToBottom();
+            setHasScrolledToUnread(false);
+        }
+    }, [roomId]); // Only on room change
+
+    // Auto-scroll to bottom for new messages (but not on initial load if there are unread)
+    useEffect(() => {
+        if (hasScrolledToUnread || unreadCount === 0) {
+            scrollToBottom();
+        }
+    }, [messages.length]);
 
     const handleSend = (e: React.FormEvent) => {
         e.preventDefault();
@@ -91,8 +115,23 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, shopName, messages, onS
                     if (!msg) return null;
                     const isMe = msg.senderId === currentUserId;
 
+                    // Calculate if this is the first unread message
+                    const isFirstUnread = unreadCount > 0 && idx === messages.length - unreadCount;
+
                     return (
-                        <div key={msg.id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                        <React.Fragment key={msg.id || idx}>
+                            {/* Unread Messages Separator */}
+                            {isFirstUnread && (
+                                <div ref={unreadSeparatorRef} className="flex items-center gap-2 my-4">
+                                    <div className="flex-1 h-px bg-red-300"></div>
+                                    <div className="text-xs font-bold text-red-500 px-3 py-1 bg-red-50 rounded-full border border-red-200">
+                                        {unreadCount} New Message{unreadCount !== 1 ? 's' : ''}
+                                    </div>
+                                    <div className="flex-1 h-px bg-red-300"></div>
+                                </div>
+                            )}
+
+                            <div className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                             <div className={`max-w-[70%] ${isMe ? 'bg-brand-blue text-white' : 'bg-white border border-gray-200'} rounded-lg p-3 shadow-sm`}>
                                 {!isMe && <div className="text-xs font-bold text-gray-500 mb-1">{msg.senderName}</div>}
 
@@ -116,6 +155,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, shopName, messages, onS
                                 </div>
                             </div>
                         </div>
+                        </React.Fragment>
                     );
                 })}
                 <div ref={messagesEndRef} />
