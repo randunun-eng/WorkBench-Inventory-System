@@ -9,7 +9,7 @@ interface ChatProps {
     globalMyShopMessages: any[];
     globalGuestChats: any[];
     setGlobalGuestChats: React.Dispatch<React.SetStateAction<any[]>>;
-    setGlobalHasUnreadMyShop: React.Dispatch<React.SetStateAction<boolean>>;
+    setMyShopUnreadCount: React.Dispatch<React.SetStateAction<number>>;
     myShopRoomId: string | null;
     myShopSendMessage: (content: string, type?: 'TEXT' | 'IMAGE', product?: any) => void;
 }
@@ -18,7 +18,7 @@ const Chat: React.FC<ChatProps> = ({
     globalMyShopMessages,
     globalGuestChats,
     setGlobalGuestChats,
-    setGlobalHasUnreadMyShop,
+    setMyShopUnreadCount,
     myShopRoomId,
     myShopSendMessage
 }) => {
@@ -101,20 +101,25 @@ const Chat: React.FC<ChatProps> = ({
         }
     }
 
-    // Mark as read logic
+    // Mark as read logic - Clear unread counts when viewing a chat
     React.useEffect(() => {
         if (activeRoomId) {
             if (activeRoomId === myShopRoomId) {
-                setGlobalHasUnreadMyShop(false);
+                // Clear my shop unread count
+                setMyShopUnreadCount(0);
             } else if (activeRoomId.includes('-guest-')) {
+                // Clear guest chat unread count
                 setGlobalGuestChats(prev => {
-                    const updated = prev.map(c => c.roomId === activeRoomId ? { ...c, hasUnread: false } : c);
+                    const updated = prev.map(c => c.roomId === activeRoomId ? { ...c, unreadCount: 0 } : c);
                     localStorage.setItem('guest_chats', JSON.stringify(updated));
                     return updated;
                 });
+            } else if (activeRoomId.startsWith('dm-')) {
+                // Clear DM room unread count (if we add DM tracking later)
+                // For now, DMs don't have separate unread tracking
             }
         }
-    }, [activeRoomId, myShopRoomId, setGlobalHasUnreadMyShop, setGlobalGuestChats]);
+    }, [activeRoomId, myShopRoomId, setMyShopUnreadCount, setGlobalGuestChats]);
 
     return (
         <div className="flex h-[calc(100vh-64px)] bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
@@ -123,9 +128,7 @@ const Chat: React.FC<ChatProps> = ({
                 onSelectRoom={setActiveRoomId}
                 onlineUsers={onlineUsers}
                 myShopRoomId={myShopRoomId}
-                hasUnreadMyShop={false} // Handled globally now
                 guestChats={globalGuestChats}
-
                 shops={shops}
                 loading={loadingShops}
             />

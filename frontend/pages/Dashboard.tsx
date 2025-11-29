@@ -109,9 +109,32 @@ const Dashboard: React.FC = () => {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Unread Logic
-  const [hasUnreadMyShop, setHasUnreadMyShop] = useState(false);
+  // Unread Logic - Changed from boolean to count
+  const [myShopUnreadCount, setMyShopUnreadCount] = useState(0);
   const prevMessageCountRef = React.useRef(0);
+
+  // Request browser notification permission on mount
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  const showBrowserNotification = (title: string, body: string) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(title, {
+          body,
+          icon: '/favicon.ico',
+          badge: '/favicon.ico',
+          tag: 'workbench-chat',
+          requireInteraction: false
+        });
+      } catch (e) {
+        console.error('Browser notification failed', e);
+      }
+    }
+  };
 
   const playNotificationSound = () => {
     try {
@@ -147,36 +170,50 @@ const Dashboard: React.FC = () => {
         const exists = prev.find(c => c.roomId === latest.roomId);
         let updated;
         if (exists) {
-          updated = prev.map(c => c.roomId === latest.roomId ? { ...c, lastMessage: latest.lastMessage, timestamp: latest.timestamp, hasUnread: true } : c);
+          updated = prev.map(c => c.roomId === latest.roomId ? {
+            ...c,
+            lastMessage: latest.lastMessage,
+            timestamp: latest.timestamp,
+            unreadCount: (c.unreadCount || 0) + 1
+          } : c);
         } else {
-          updated = [...prev, { ...latest, hasUnread: true }];
+          updated = [...prev, { ...latest, unreadCount: 1 }];
         }
         localStorage.setItem('guest_chats', JSON.stringify(updated));
         return updated;
       });
 
-      // Only play sound if we are NOT in the chat view or if the chat view is active but looking at a different room
-      // But since this is global, we just play it. The Chat component might also play it? 
-      // No, we will remove logic from Chat component.
+      // Show browser notification and play sound
       playNotificationSound();
+      showBrowserNotification(
+        `New message from ${latest.guestName || 'Guest'}`,
+        latest.lastMessage || 'You have a new message'
+      );
     }
   }, [notifications]);
 
   // Handle My Shop Messages (Unread)
   useEffect(() => {
-    // If we are in Chat view AND looking at My Shop, we don't mark as unread
-    // But we don't know the active room of the Chat component here easily unless we lift that state too.
-    // For now, let's just track "new messages" globally.
-
     if (isHistoryLoaded) {
       const currentCount = myShopMessages.length;
       const prevCount = prevMessageCountRef.current;
 
       if (currentCount > prevCount) {
-        // If we are NOT in chat view, mark unread
+        const newMessagesCount = currentCount - prevCount;
+
+        // If we are NOT in chat view, increment unread count
         if (activeView !== 'chat') {
-          setHasUnreadMyShop(true);
+          setMyShopUnreadCount(prev => prev + newMessagesCount);
           playNotificationSound();
+
+          // Get the latest message for notification
+          const latestMessage = myShopMessages[myShopMessages.length - 1];
+          if (latestMessage) {
+            showBrowserNotification(
+              `New message in ${user.shop_name || 'My Shop'}`,
+              latestMessage.content || 'You have a new message'
+            );
+          }
         }
       }
       prevMessageCountRef.current = currentCount;
@@ -558,11 +595,11 @@ const Dashboard: React.FC = () => {
               <MessageSquare size={20} /> Chat
             </div>
             {(() => {
-              const unreadCount = (hasUnreadMyShop ? 1 : 0) + guestChats.filter(c => c.hasUnread).length;
-              if (unreadCount > 0) {
+              const totalUnread = myShopUnreadCount + guestChats.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+              if (totalUnread > 0) {
                 return (
                   <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                    {unreadCount}
+                    {totalUnread}
                   </span>
                 );
               }
@@ -630,7 +667,7 @@ const Dashboard: React.FC = () => {
                       globalMyShopMessages={myShopMessages}
                       globalGuestChats={guestChats}
                       setGlobalGuestChats={setGuestChats}
-                      setGlobalHasUnreadMyShop={setHasUnreadMyShop}
+                      setMyShopUnreadCount={setMyShopUnreadCount}
                       myShopRoomId={myShopRoomId}
                       myShopSendMessage={myShopSendMessage}
                     />

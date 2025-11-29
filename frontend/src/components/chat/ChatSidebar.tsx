@@ -8,13 +8,12 @@ interface ChatSidebarProps {
     onSelectRoom: (roomId: string) => void;
     onlineUsers: OnlineUser[];
     myShopRoomId?: string | null;
-    hasUnreadMyShop?: boolean;
     guestChats?: any[];
     shops: APIShop[];
     loading?: boolean;
 }
 
-const ChatSidebar: React.FC<ChatSidebarProps> = ({ activeRoomId, onSelectRoom, onlineUsers, myShopRoomId, hasUnreadMyShop, guestChats = [], shops, loading = false }) => {
+const ChatSidebar: React.FC<ChatSidebarProps> = ({ activeRoomId, onSelectRoom, onlineUsers, myShopRoomId, guestChats = [], shops, loading = false }) => {
     // Shops are now passed as props
 
     // Debug logging
@@ -138,9 +137,11 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ activeRoomId, onSelectRoom, o
                                     <div className="truncate font-medium">{chat.guestName || 'Guest'}</div>
                                     <div className="truncate text-xs text-gray-400">{chat.lastMessage}</div>
                                 </div>
-                                {/* Unread Badge */}
-                                {chat.hasUnread && (
-                                    <span className="ml-auto w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                                {/* Unread Badge - Show count instead of dot */}
+                                {chat.unreadCount > 0 && (
+                                    <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
+                                        {chat.unreadCount}
+                                    </span>
                                 )}
                             </button>
                         ))}
