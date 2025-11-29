@@ -20,6 +20,7 @@ export interface ChatMessage {
 export const usePresence = () => {
     const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
     const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+    const [notifications, setNotifications] = useState<any[]>([]);
     const [isConnected, setIsConnected] = useState(false);
     const wsRef = useRef<WebSocket | null>(null);
     const reconnectTimeoutRef = useRef<any>(null);
@@ -77,6 +78,10 @@ export const usePresence = () => {
                     case 'HISTORY':
                         setChatHistory(Array.isArray(data.messages) ? data.messages : []);
                         break;
+                    case 'DM_NOTIFICATION':
+                        console.log('[usePresence] Received DM_NOTIFICATION:', data);
+                        setNotifications(prev => [...prev, data]);
+                        break;
                 }
             } catch (e) {
                 console.error('Failed to parse presence message', e);
@@ -126,5 +131,5 @@ export const usePresence = () => {
         }
     };
 
-    return { onlineUsers, isConnected, chatHistory, sendMessage };
+    return { onlineUsers, isConnected, chatHistory, sendMessage, notifications };
 };

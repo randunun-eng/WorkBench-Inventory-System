@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { usePresence } from '../../hooks/usePresence';
+import { OnlineUser } from '../../hooks/usePresence';
 import { useChatRoom } from '../../hooks/useChatRoom';
 import { api, APIShop } from '../../../api';
 import ChatSidebar from '../../components/chat/ChatSidebar';
@@ -9,27 +9,34 @@ interface ChatProps {
     globalMyShopMessages: any[];
     globalGuestChats: any[];
     setGlobalGuestChats: React.Dispatch<React.SetStateAction<any[]>>;
-    setMyShopUnreadCount: React.Dispatch<React.SetStateAction<number>>;
     myShopRoomId: string | null;
     myShopSendMessage: (content: string, type?: 'TEXT' | 'IMAGE', product?: any) => void;
     activeChatRoomId: string | null;
     setActiveChatRoomId: React.Dispatch<React.SetStateAction<string | null>>;
+    onlineUsers: OnlineUser[];
+    generalMessages: any[];
+    sendGeneralMessage: (content: string, type?: 'TEXT' | 'IMAGE', product?: any) => void;
+    dmChats: any[];
+    setDmChats: React.Dispatch<React.SetStateAction<any[]>>;
 }
 
 const Chat: React.FC<ChatProps> = ({
     globalMyShopMessages,
     globalGuestChats,
     setGlobalGuestChats,
-    setMyShopUnreadCount,
     myShopRoomId,
     myShopSendMessage,
     activeChatRoomId,
-    setActiveChatRoomId
+    setActiveChatRoomId,
+    onlineUsers,
+    generalMessages,
+    sendGeneralMessage,
+    dmChats,
+    setDmChats
 }) => {
     const [activeRoomId, setActiveRoomId] = useState<string | null>(activeChatRoomId || 'general');
     const [shops, setShops] = useState<APIShop[]>([]);
     const [loadingShops, setLoadingShops] = useState(true);
-    const { onlineUsers, chatHistory: generalMessages, sendMessage: sendGeneralMessage } = usePresence();
 
     React.useEffect(() => {
         const fetchShops = async () => {
@@ -79,7 +86,8 @@ const Chat: React.FC<ChatProps> = ({
         // DM or other room
         currentMessages = activeRoomMessages;
         currentSendMessage = activeRoomSendMessage;
-        currentUnreadCount = 0; // DM rooms don't track unread yet
+        const dmChat = dmChats.find(c => c.roomId === activeRoomId);
+        currentUnreadCount = dmChat?.unreadCount || 0;
     }
 
     // Determine Shop Name for Header
@@ -125,8 +133,7 @@ const Chat: React.FC<ChatProps> = ({
     React.useEffect(() => {
         if (activeRoomId) {
             if (activeRoomId === myShopRoomId) {
-                // Clear my shop unread count
-                setMyShopUnreadCount(0);
+                // Clear my shop unread count - Logic removed
             } else if (activeRoomId.includes('-guest-')) {
                 // Clear guest chat unread count
                 setGlobalGuestChats(prev => {
@@ -135,11 +142,19 @@ const Chat: React.FC<ChatProps> = ({
                     return updated;
                 });
             } else if (activeRoomId.startsWith('dm-')) {
-                // Clear DM room unread count (if we add DM tracking later)
-                // For now, DMs don't have separate unread tracking
+                // Clear DM room unread count
+                // Check if it actually needs clearing to avoid infinite loop if we just set it
+                const dmChat = dmChats.find(c => c.roomId === activeRoomId);
+                if (dmChat && dmChat.unreadCount > 0) {
+                    setDmChats(prev => {
+                        const updated = prev.map(c => c.roomId === activeRoomId ? { ...c, unreadCount: 0 } : c);
+                        localStorage.setItem('dm_chats', JSON.stringify(updated));
+                        return updated;
+                    });
+                }
             }
         }
-    }, [activeRoomId, myShopRoomId, setMyShopUnreadCount, setGlobalGuestChats]);
+    }, [activeRoomId, myShopRoomId, setGlobalGuestChats, dmChats, setDmChats]);
 
     return (
         <div className="flex h-[calc(100vh-64px)] bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
@@ -149,6 +164,7 @@ const Chat: React.FC<ChatProps> = ({
                 onlineUsers={onlineUsers}
                 myShopRoomId={myShopRoomId}
                 guestChats={globalGuestChats}
+                dmChats={dmChats}
                 shops={shops}
                 loading={loadingShops}
             />

@@ -22,6 +22,8 @@ chat.get('/room/:roomId', async (c) => {
     let userId = '';
     let username = '';
 
+    const url = new URL(c.req.url)
+
     if (token) {
         // Authenticated User (Shop Owner)
         const user = await verifyToken(token)
@@ -31,7 +33,9 @@ chat.get('/room/:roomId', async (c) => {
         const userData = user as any
         userId = userData.uid
         username = userData.shop_name || userData.email.split('@')[0]
-        console.log('[Chat Route] Authenticated user:', { userId, username, userData })
+        const shopSlug = userData.shop_slug || ''
+        console.log('[Chat Route] Authenticated user:', { userId, username, shopSlug, userData })
+        url.searchParams.set('shopSlug', shopSlug)
     } else if (guestId) {
         // Guest User (Public Storefront)
         userId = guestId
@@ -43,7 +47,6 @@ chat.get('/room/:roomId', async (c) => {
     const id = c.env.CHAT_ROOM.idFromName(roomId)
     const stub = c.env.CHAT_ROOM.get(id)
 
-    const url = new URL(c.req.url)
     url.searchParams.set('userId', userId)
     url.searchParams.set('username', username)
     url.searchParams.set('roomId', roomId)
@@ -77,9 +80,11 @@ chat.get('/presence', async (c) => {
     const userData = user as any
     const userId = userData.uid
     const username = userData.shop_name || userData.email.split('@')[0]
-    console.log('[Presence Route] Authenticated user:', { userId, username, userData })
+    const shopSlug = userData.shop_slug || ''
+    console.log('[Presence Route] Authenticated user:', { userId, username, shopSlug, userData })
     url.searchParams.set('userId', userId)
     url.searchParams.set('username', username)
+    url.searchParams.set('shopSlug', shopSlug)
 
     const newReq = new Request(url.toString(), c.req.raw)
     return stub.fetch(newReq)

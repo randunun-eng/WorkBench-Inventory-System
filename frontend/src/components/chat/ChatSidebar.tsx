@@ -9,11 +9,12 @@ interface ChatSidebarProps {
     onlineUsers: OnlineUser[];
     myShopRoomId?: string | null;
     guestChats?: any[];
+    dmChats?: any[];
     shops: APIShop[];
     loading?: boolean;
 }
 
-const ChatSidebar: React.FC<ChatSidebarProps> = ({ activeRoomId, onSelectRoom, onlineUsers, myShopRoomId, guestChats = [], shops, loading = false }) => {
+const ChatSidebar: React.FC<ChatSidebarProps> = ({ activeRoomId, onSelectRoom, onlineUsers, myShopRoomId, guestChats = [], dmChats = [], shops, loading = false }) => {
     // Shops are now passed as props
 
     // Debug logging
@@ -205,6 +206,25 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ activeRoomId, onSelectRoom, o
                                             <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-white ${online ? 'bg-green-500' : 'bg-gray-300'}`}></span>
                                         </div>
                                         <span className="truncate">{shop.shop_name}</span>
+                                        {(() => {
+                                            // Check for unread DM
+                                            // DM Room ID: dm-slug1-slug2 (sorted)
+                                            if (myShopRoomId) {
+                                                const mySlug = myShopRoomId.replace('chat-', '');
+                                                const otherSlug = shop.shop_slug;
+                                                const slugs = [mySlug, otherSlug].sort();
+                                                const dmRoomId = `dm-${slugs[0]}-${slugs[1]}`;
+                                                const dmChat = dmChats.find(c => c.roomId === dmRoomId);
+                                                if (dmChat && dmChat.unreadCount > 0) {
+                                                    return (
+                                                        <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
+                                                            {dmChat.unreadCount}
+                                                        </span>
+                                                    );
+                                                }
+                                            }
+                                            return null;
+                                        })()}
                                     </button>
                                 );
                             })
@@ -229,16 +249,16 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ activeRoomId, onSelectRoom, o
                     </div>
                 )}
             </div>
-            
+
             {/* DEBUG SECTION - REMOVE LATER */}
             <div className="p-2 border-t border-gray-200 text-[10px] text-gray-400 font-mono overflow-hidden">
                 <div>Online: {onlineUsers.length}</div>
                 <div>Shops: {shops.length}</div>
                 <div className="truncate">
-                    Users: {onlineUsers.map(u => `${u.username}(${u.userId.substring(0,4)})`).join(', ')}
+                    Users: {onlineUsers.map(u => `${u.username}(${u.userId.substring(0, 4)})`).join(', ')}
                 </div>
                 <div className="truncate">
-                    Shops: {shops.map(s => `${s.shop_name}(${s.id.substring(0,4)})`).join(', ')}
+                    Shops: {shops.map(s => `${s.shop_name}(${s.id.substring(0, 4)})`).join(', ')}
                 </div>
             </div>
         </div>

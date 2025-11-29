@@ -2,19 +2,14 @@
 
 echo "🚀 Starting Deployment for WorkBench Inventory System..."
 
-# 1. Deploy Cloudflare Workers (Backend)
-echo "📦 Deploying Backend (Workers)..."
-npx wrangler deploy
-
-# 2. Build Frontend
+# 1. Build Frontend
 echo "🏗️ Building Frontend..."
 cd frontend
 npm run build
 cd ..
 
-# 3. Deploy Frontend (Pages)
-echo "🌐 Deploying Frontend (Pages)..."
-# Note: You need to create a Pages project first or let wrangler create one
-npx wrangler pages deploy frontend/dist --project-name workbench-frontend
+# 2. Deploy Cloudflare Workers (Backend + Frontend Assets)
+echo "📦 Deploying Worker (Backend + Frontend)..."
+npx wrangler deploy
 
 echo "✅ Deployment Complete!"

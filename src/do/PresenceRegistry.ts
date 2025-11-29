@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers'
 
 export class PresenceRegistry extends DurableObject {
-    onlineUsers: Map<string, { session: WebSocket, username: string }>
+    onlineUsers: Map<string, { session: WebSocket, username: string, shopSlug?: string }>
 
     messages: any[] = []
 
@@ -17,6 +17,17 @@ export class PresenceRegistry extends DurableObject {
     async fetch(request: Request) {
         const upgradeHeader = request.headers.get('Upgrade')
         if (!upgradeHeader || upgradeHeader !== 'websocket') {
+            // Handle Internal Notifications (POST)
+            if (request.method === 'POST') {
+                const data = await request.json() as any
+                if (data.type === 'DM_NOTIFICATION') {
+                    // data: { targetSlug, roomId, senderName, lastMessage, timestamp }
+                    console.log('[PresenceRegistry] Received DM_NOTIFICATION:', data)
+                    this.notifyUserBySlug(data.targetSlug, data)
+                    return new Response('OK')
+                }
+                return new Response('Unknown type', { status: 400 })
+            }
             return new Response('Expected Upgrade: websocket', { status: 426 })
         }
 
@@ -44,12 +55,13 @@ export class PresenceRegistry extends DurableObject {
         // For now, I will implement the chat logic assuming `userId` and `username` are available.
 
         const username = url.searchParams.get('username') || 'Anonymous'
+        const shopSlug = url.searchParams.get('shopSlug') || undefined
         const uid = userId || `anon-${Date.now()}` // Fallback
 
         const webSocketPair = new WebSocketPair()
         const [client, server] = Object.values(webSocketPair)
 
-        this.handleSession(server, uid, username)
+        this.handleSession(server, uid, username, shopSlug)
 
         return new Response(null, {
             status: 101,
@@ -57,9 +69,9 @@ export class PresenceRegistry extends DurableObject {
         })
     }
 
-    handleSession(webSocket: WebSocket, userId: string, username: string) {
-        console.log('[PresenceRegistry] New session:', { userId, username })
-        this.onlineUsers.set(userId, { session: webSocket, username })
+    handleSession(webSocket: WebSocket, userId: string, username: string, shopSlug?: string) {
+        console.log('[PresenceRegistry] New session:', { userId, username, shopSlug })
+        this.onlineUsers.set(userId, { session: webSocket, username, shopSlug })
         webSocket.accept()
 
         // Broadcast "User Online"
@@ -124,6 +136,20 @@ export class PresenceRegistry extends DurableObject {
                 data.session.send(message)
             } catch (err) {
                 this.onlineUsers.delete(userId)
+            }
+        }
+    }
+
+    notifyUserBySlug(slug: string, notification: any) {
+        // Find users with this slug
+        for (const [userId, data] of this.onlineUsers) {
+            if (data.shopSlug === slug) {
+                try {
+                    console.log('[PresenceRegistry] Sending notification to', userId)
+                    data.session.send(JSON.stringify(notification))
+                } catch (err) {
+                    console.error('Failed to notify user', userId, err)
+                }
             }
         }
     }

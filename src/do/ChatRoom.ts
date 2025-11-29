@@ -18,13 +18,21 @@ interface ChatMessage {
 interface WebSocketData {
     userId: string
     username: string
+    shopSlug?: string
+}
+
+interface Env {
+    CHAT_ROOM: DurableObjectNamespace
+    PRESENCE_REGISTRY: DurableObjectNamespace
 }
 
 export class ChatRoom extends DurableObject {
     sessions: Map<WebSocket, WebSocketData>
+    env: Env
 
-    constructor(ctx: DurableObjectState, env: any) {
+    constructor(ctx: DurableObjectState, env: Env) {
         super(ctx, env)
+        this.env = env
         this.sessions = new Map()
     }
 
@@ -49,12 +57,13 @@ export class ChatRoom extends DurableObject {
 
         const userId = url.searchParams.get('userId') || 'anonymous'
         const username = url.searchParams.get('username') || 'Anonymous'
+        const shopSlug = url.searchParams.get('shopSlug') || undefined
         const roomId = url.searchParams.get('roomId') || ''
 
         const webSocketPair = new WebSocketPair()
         const [client, server] = Object.values(webSocketPair)
 
-        this.handleSession(server, { userId, username }, roomId)
+        this.handleSession(server, { userId, username, shopSlug }, roomId)
 
         return new Response(null, {
             status: 101,
@@ -63,7 +72,7 @@ export class ChatRoom extends DurableObject {
     }
 
     async handleSession(webSocket: WebSocket, userData: WebSocketData, roomId: string) {
-        console.log('[ChatRoom] New session:', { roomId, userId: userData.userId, username: userData.username })
+        console.log('[ChatRoom] New session:', { roomId, userId: userData.userId, username: userData.username, shopSlug: userData.shopSlug })
         this.sessions.set(webSocket, userData)
         webSocket.accept()
 
@@ -131,6 +140,55 @@ export class ChatRoom extends DurableObject {
                                     product: message.product
                                 })
                             }));
+                        }
+                    } else if (roomId.startsWith('dm-')) {
+                        // DM Room: dm-slug1-slug2
+                        // Robust recipient detection using shopSlug
+                        if (userData.shopSlug) {
+                            // We know who sent it (userData.shopSlug)
+                            // The recipient is the OTHER slug in the room ID
+                            const slugs = roomId.replace('dm-', '').split('-');
+                            // This split is tricky if slugs have hyphens.
+                            // BUT, we know one of them is userData.shopSlug.
+                            // So we can remove userData.shopSlug from the string and see what's left.
+
+                            // Strategy:
+                            // 1. Remove 'dm-' prefix
+                            // 2. We have "slug1-slug2" or "slug2-slug1" (sorted)
+                            // 3. We know userData.shopSlug is one of them.
+
+                            const combined = roomId.replace('dm-', '');
+                            let targetSlug = '';
+
+                            if (combined.startsWith(userData.shopSlug + '-')) {
+                                targetSlug = combined.substring(userData.shopSlug.length + 1);
+                            } else if (combined.endsWith('-' + userData.shopSlug)) {
+                                targetSlug = combined.substring(0, combined.length - userData.shopSlug.length - 1);
+                            }
+
+                            if (targetSlug) {
+                                console.log('[ChatRoom] Identified DM target:', targetSlug);
+                                const id = this.env.PRESENCE_REGISTRY.idFromName('global');
+                                const stub = this.env.PRESENCE_REGISTRY.get(id);
+
+                                stub.fetch(new Request('https://internal/notify', {
+                                    method: 'POST',
+                                    body: JSON.stringify({
+                                        type: 'DM_NOTIFICATION',
+                                        targetSlug: targetSlug,
+                                        roomId: roomId,
+                                        senderName: userData.username,
+                                        lastMessage: message.content,
+                                        timestamp: message.timestamp,
+                                        product: message.product
+                                    })
+                                })).catch(err => console.error('Failed to send DM notification', err));
+                            } else {
+                                console.warn('[ChatRoom] Could not identify target slug for DM:', roomId, 'Sender:', userData.shopSlug);
+                            }
+                        } else {
+                            // Fallback for legacy or unknown slug (should not happen with new code)
+                            console.warn('[ChatRoom] Missing shopSlug for DM sender, cannot notify recipient reliably.');
                         }
                     }
                 } else if (data.type === 'PING') {

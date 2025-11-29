@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Edit, Trash2, Image, FileText, Package, DollarSign,
@@ -15,6 +15,7 @@ import AdminDashboard from './AdminDashboard';
 import ShopSettings from './ShopSettings';
 import { api } from '../api';
 import { useChatRoom } from '../src/hooks/useChatRoom';
+import { usePresence } from '../src/hooks/usePresence';
 
 interface InventoryItem {
   id: string;
@@ -104,14 +105,27 @@ const Dashboard: React.FC = () => {
   const myShopRoomId = user.shop_slug ? `chat-${user.shop_slug}` : null;
   const { messages: myShopMessages, sendMessage: myShopSendMessage, notifications, isHistoryLoaded } = useChatRoom(myShopRoomId);
 
+  // Global Presence (Online Status & General Chat)
+  const { onlineUsers, chatHistory: generalMessages, sendMessage: sendGeneralMessage, notifications: presenceNotifications } = usePresence();
+
   // Guest Chats Management
   const [guestChats, setGuestChats] = useState<any[]>(() => {
     const saved = localStorage.getItem('guest_chats');
     return saved ? JSON.parse(saved) : [];
   });
 
+  // DM Chats Management (for unread counts)
+  const [dmChats, setDmChats] = useState<any[]>(() => {
+    const saved = localStorage.getItem('dm_chats');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Refs to track processed notifications to avoid duplicates on re-renders/navigation
+  const lastProcessedGuestNotification = useRef<number>(0);
+  const lastProcessedDMNotification = useRef<number>(0);
+
   // Unread Logic - Changed from boolean to count
-  const [myShopUnreadCount, setMyShopUnreadCount] = useState(0);
+  // myShopUnreadCount removed as the UI for it is gone
   const prevMessageCountRef = React.useRef(0);
 
   // Request browser notification permission on mount
@@ -163,10 +177,16 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // Handle Guest Notifications
+  // Handle Guest Notifications (from ChatRoom DO)
   useEffect(() => {
     if (notifications.length > 0) {
       const latest = notifications[notifications.length - 1];
+
+      // Prevent duplicate processing
+      if (latest.timestamp <= lastProcessedGuestNotification.current) {
+        return;
+      }
+      lastProcessedGuestNotification.current = latest.timestamp;
 
       // Check if user is currently viewing this chat
       const isViewingThisChat = activeView === 'chat' && activeChatRoomId === latest.roomId;
@@ -200,6 +220,56 @@ const Dashboard: React.FC = () => {
     }
   }, [notifications, activeView, activeChatRoomId]);
 
+  // Handle DM Notifications (from PresenceRegistry DO)
+  useEffect(() => {
+    if (presenceNotifications.length > 0) {
+      const latest = presenceNotifications[presenceNotifications.length - 1];
+
+      // Prevent duplicate processing
+      if (latest.timestamp <= lastProcessedDMNotification.current) {
+        return;
+      }
+      lastProcessedDMNotification.current = latest.timestamp;
+
+      if (latest.type === 'DM_NOTIFICATION') {
+        // Check if user is currently viewing this chat
+        const isViewingThisChat = activeView === 'chat' && activeChatRoomId === latest.roomId;
+
+        setDmChats(prev => {
+          const exists = prev.find(c => c.roomId === latest.roomId);
+          let updated;
+          if (exists) {
+            updated = prev.map(c => c.roomId === latest.roomId ? {
+              ...c,
+              senderName: latest.senderName,
+              lastMessage: latest.lastMessage,
+              timestamp: latest.timestamp,
+              unreadCount: isViewingThisChat ? 0 : (c.unreadCount || 0) + 1
+            } : c);
+          } else {
+            updated = [...prev, {
+              roomId: latest.roomId,
+              senderName: latest.senderName,
+              lastMessage: latest.lastMessage,
+              timestamp: latest.timestamp,
+              unreadCount: isViewingThisChat ? 0 : 1
+            }];
+          }
+          localStorage.setItem('dm_chats', JSON.stringify(updated));
+          return updated;
+        });
+
+        if (!isViewingThisChat) {
+          playNotificationSound();
+          showBrowserNotification(
+            `Message from ${latest.senderName}`,
+            latest.lastMessage || 'You have a new message'
+          );
+        }
+      }
+    }
+  }, [presenceNotifications, activeView, activeChatRoomId]);
+
   // Handle My Shop Messages (Unread)
   useEffect(() => {
     if (isHistoryLoaded) {
@@ -207,14 +277,11 @@ const Dashboard: React.FC = () => {
       const prevCount = prevMessageCountRef.current;
 
       if (currentCount > prevCount) {
-        const newMessagesCount = currentCount - prevCount;
-
         // Check if user is viewing the my shop chat
         const isViewingMyShopChat = activeView === 'chat' && activeChatRoomId === myShopRoomId;
 
-        // Only increment unread count if NOT viewing this chat
+        // Only notify if NOT viewing this chat
         if (!isViewingMyShopChat) {
-          setMyShopUnreadCount(prev => prev + newMessagesCount);
           playNotificationSound();
 
           // Get the latest message for notification
@@ -606,7 +673,10 @@ const Dashboard: React.FC = () => {
               <MessageSquare size={20} /> Chat
             </div>
             {(() => {
-              const totalUnread = myShopUnreadCount + guestChats.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+              const guestUnread = guestChats.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+              const dmUnread = dmChats.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+              const totalUnread = guestUnread + dmUnread;
+
               if (totalUnread > 0) {
                 return (
                   <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
@@ -678,11 +748,15 @@ const Dashboard: React.FC = () => {
                       globalMyShopMessages={myShopMessages}
                       globalGuestChats={guestChats}
                       setGlobalGuestChats={setGuestChats}
-                      setMyShopUnreadCount={setMyShopUnreadCount}
                       myShopRoomId={myShopRoomId}
                       myShopSendMessage={myShopSendMessage}
                       activeChatRoomId={activeChatRoomId}
                       setActiveChatRoomId={setActiveChatRoomId}
+                      onlineUsers={onlineUsers}
+                      generalMessages={generalMessages}
+                      sendGeneralMessage={sendGeneralMessage}
+                      dmChats={dmChats}
+                      setDmChats={setDmChats}
                     />
                   )}
 
