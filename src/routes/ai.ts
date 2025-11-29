@@ -292,26 +292,58 @@ ai.post('/analyze-datasheet', async (c) => {
 
         // Generate Content
         log('Generating content...');
-        const genUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-        const payload = {
-            contents: [{
-                parts: [
-                    { text: "Extract all technical specifications, part numbers, ratings, and key parameters from this datasheet. List them clearly in JSON format." },
-                    {
-                        file_data: {
-                            mime_type: contentType,
-                            file_uri: fileUri
+
+        const generateWithModel = async (model: string) => {
+            log(`Attempting generation with model: ${model}`);
+            const genUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{
+                    parts: [
+                        { text: "Extract all technical specifications, part numbers, ratings, and key parameters from this datasheet. List them clearly in JSON format." },
+                        {
+                            file_data: {
+                                mime_type: contentType,
+                                file_uri: fileUri
+                            }
                         }
-                    }
-                ]
-            }]
+                    ]
+                }]
+            };
+            return fetch(genUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
         };
 
-        const genResponse = await fetch(genUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+        // Try the latest experimental model first (Gemini 2.0 Flash)
+        let genResponse = await generateWithModel('gemini-2.0-flash-exp');
+
+        if (!genResponse.ok && genResponse.status === 404) {
+            log('Gemini 2.0 Flash failed (404). Listing available models to find a fallback...');
+            const listModelsUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+            const listResponse = await fetch(listModelsUrl);
+
+            if (listResponse.ok) {
+                const listData: any = await listResponse.json();
+                const models = listData.models || [];
+                log(`Available Models: ${models.map((m: any) => m.name).join(', ')}`);
+
+                // Find best fallback: prefer 2.0, then 1.5 flash, then 1.5 pro
+                const fallbackModel = models.find((m: any) => m.name.includes('gemini-2.0-flash'))?.name.split('/').pop() ||
+                    models.find((m: any) => m.name.includes('gemini-1.5-flash'))?.name.split('/').pop() ||
+                    models.find((m: any) => m.name.includes('gemini-1.5-pro'))?.name.split('/').pop();
+
+                if (fallbackModel) {
+                    log(`Found fallback model: ${fallbackModel}. Retrying...`);
+                    genResponse = await generateWithModel(fallbackModel);
+                } else {
+                    log('No suitable fallback model found.');
+                }
+            } else {
+                log('Failed to list models.');
+            }
+        }
 
         if (!genResponse.ok) {
             const text = await genResponse.text();
