@@ -18,7 +18,7 @@ inventory.post('/', async (c) => {
   const {
     category_id, name, description, specifications, stock_qty, restock_threshold,
     price, landing_cost, currency, is_public, is_visible_to_network, shareable_qty,
-    primary_image_r2_key, datasheet_r2_key
+    primary_image_r2_key, datasheet_r2_key, gemini_file_uri
   } = await c.req.json()
 
   try {
@@ -52,8 +52,8 @@ inventory.post('/', async (c) => {
         INSERT INTO catalog_items (
           id, category_id, name, description, specifications,
           datasheet_r2_key, primary_image_r2_key,
-          created_by_user_id, is_public
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          created_by_user_id, is_public, gemini_file_uri
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         catalogItemId,
         parseInt(category_id) || null,
@@ -63,7 +63,8 @@ inventory.post('/', async (c) => {
         datasheet_r2_key || null,
         primary_image_r2_key || null,
         user.uid,
-        is_public ? 1 : 0
+        is_public ? 1 : 0,
+        gemini_file_uri || null
       ).run()
     }
 
@@ -113,7 +114,9 @@ inventory.get('/', async (c) => {
       c.datasheet_r2_key,
       c.primary_image_r2_key,
       c.created_by_user_id,
+      c.created_by_user_id,
       c.is_public,
+      c.gemini_file_uri,
       c.created_at,
       c.updated_at,
       COALESCE(si.stock_qty, 0) as stock_qty,
@@ -190,7 +193,8 @@ inventory.put('/:id', async (c) => {
 
     const {
       name, description, specifications, datasheet_r2_key, primary_image_r2_key, is_public,
-      stock_qty, restock_threshold, price, currency, is_visible_to_network, shareable_qty
+      stock_qty, restock_threshold, price, currency, is_visible_to_network, shareable_qty,
+      gemini_file_uri
     } = updates
 
     // Update catalog_items (only if user is creator)
@@ -203,6 +207,7 @@ inventory.put('/:id', async (c) => {
           datasheet_r2_key = COALESCE(?, datasheet_r2_key),
           primary_image_r2_key = COALESCE(?, primary_image_r2_key),
           is_public = COALESCE(?, is_public),
+          gemini_file_uri = COALESCE(?, gemini_file_uri),
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `).bind(
@@ -212,6 +217,7 @@ inventory.put('/:id', async (c) => {
         datasheet_r2_key ?? null,
         primary_image_r2_key ?? null,
         is_public !== undefined ? (is_public ? 1 : 0) : null,
+        gemini_file_uri ?? null,
         id
       ).run()
     }

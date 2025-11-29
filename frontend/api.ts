@@ -309,6 +309,25 @@ export const api = {
     return await response.json();
   },
 
+  async analyzeDatasheet(datasheetKey: string): Promise<any> {
+    if (!this.token) throw new Error('Not authenticated');
+
+    const response = await fetch(`${API_BASE_URL}/api/ai/analyze-datasheet`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.token}`
+      },
+      body: JSON.stringify({ datasheetKey })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.details || errorData.error || 'Failed to analyze datasheet');
+    }
+    return await response.json();
+  },
+
   async chatWithAI(messages: any[]): Promise<any> {
     const headers: any = {
       'Content-Type': 'application/json'

@@ -35,6 +35,7 @@ interface InventoryItem {
   shareable_qty: number;
   created_at: string;
   updated_at: string;
+  gemini_file_uri?: string | null;
 }
 
 interface Category {
@@ -65,7 +66,9 @@ const Dashboard: React.FC = () => {
     currency: 'LKR',
     is_public: false,
     is_visible_to_network: false,
-    shareable_qty: '0'
+    is_visible_to_network: false,
+    shareable_qty: '0',
+    gemini_file_uri: ''
   });
 
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -506,7 +509,8 @@ const Dashboard: React.FC = () => {
         is_visible_to_network: formData.is_visible_to_network,
         shareable_qty: parseInt(formData.shareable_qty),
         primary_image_r2_key: imageKey,
-        datasheet_r2_key: datasheetKey
+        datasheet_r2_key: datasheetKey,
+        gemini_file_uri: formData.gemini_file_uri
       };
 
       const url = editingItem
@@ -611,7 +615,9 @@ const Dashboard: React.FC = () => {
       currency: item.currency || 'LKR',
       is_public: Boolean(item.is_public),
       is_visible_to_network: Boolean(item.is_visible_to_network),
-      shareable_qty: item.shareable_qty?.toString() || '0'
+      is_visible_to_network: Boolean(item.is_visible_to_network),
+      shareable_qty: item.shareable_qty?.toString() || '0',
+      gemini_file_uri: item.gemini_file_uri || ''
     });
     setShowAddModal(true);
   };
@@ -628,7 +634,9 @@ const Dashboard: React.FC = () => {
       currency: 'LKR',
       is_public: false,
       is_visible_to_network: false,
-      shareable_qty: '0'
+      is_visible_to_network: false,
+      shareable_qty: '0',
+      gemini_file_uri: ''
     });
     setImageFile(null);
     setDatasheetFile(null);
@@ -1199,6 +1207,8 @@ const Dashboard: React.FC = () => {
                 />
               </div>
 
+
+
               {/* Datasheet Upload */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Datasheet (PDF)</label>
@@ -1208,12 +1218,60 @@ const Dashboard: React.FC = () => {
                     <span className="text-sm text-gray-600">Current Datasheet Attached</span>
                   </div>
                 )}
-                <input
-                  type="file"
-                  accept=".pdf"
-                  onChange={(e) => setDatasheetFile(e.target.files?.[0] || null)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-brand-blue"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="file"
+                    accept=".pdf,image/*"
+                    onChange={(e) => setDatasheetFile(e.target.files?.[0] || null)}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-brand-blue"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!datasheetFile) {
+                        alert('Please select a datasheet file first.');
+                        return;
+                      }
+                      try {
+                        setUploading(true);
+                        // 1. Upload the file first
+                        const uploadResult = await uploadFile(datasheetFile, false, true);
+                        if (uploadResult && uploadResult.key) {
+                          // 2. Analyze the uploaded file
+                          const analysisResult = await api.analyzeDatasheet(uploadResult.key);
+                          if (analysisResult.analysis) {
+                            // 3. Try to parse JSON if it's a string
+                            let specs = analysisResult.analysis;
+                            try {
+                              // Clean up markdown code blocks if present
+                              const cleanJson = specs.replace(/```json\n|\n```/g, '').trim();
+                              specs = JSON.parse(cleanJson);
+                            } catch (e) {
+                              console.warn('Analysis result is not pure JSON', e);
+                            }
+
+                            setFormData(prev => ({
+                              ...prev,
+                              specifications: JSON.stringify(specs, null, 2),
+                              gemini_file_uri: analysisResult.fileUri // Store the Gemini File URI
+                            }));
+                            alert('Datasheet analyzed successfully! Specifications updated.');
+                          }
+                        }
+                      } catch (error: any) {
+                        console.error('Analysis failed:', error);
+                        alert(`Analysis failed: ${error.message}`);
+                      } finally {
+                        setUploading(false);
+                      }
+                    }}
+                    disabled={!datasheetFile || uploading}
+                    className="bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    <Sparkles size={16} />
+                    {uploading ? 'Analyzing...' : 'Analyze PDF'}
+                  </button>
+                </div>
               </div>
 
               {/* Visibility Options */}
@@ -1275,150 +1333,156 @@ const Dashboard: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div >
       )}
 
       {/* Adjust Stock Modal */}
-      {showAdjustModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-md p-6">
-            <h3 className="text-lg font-bold mb-4">Adjust Stock: {selectedItemForAdjust?.name}</h3>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700">Change Amount (+/-)</label>
-              <input
-                type="number"
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                value={adjustAmount}
-                onChange={(e) => setAdjustAmount(parseInt(e.target.value))}
-              />
-              <p className="text-xs text-gray-500 mt-1">Positive to add, negative to remove.</p>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700">Reason</label>
-              <input
-                type="text"
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                placeholder="e.g. Restock, Damaged"
-                value={adjustReason}
-                onChange={(e) => setAdjustReason(e.target.value)}
-              />
-            </div>
-            <div className="flex justify-end space-x-2">
-              <button
-                onClick={() => setShowAdjustModal(false)}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={submitAdjustment}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* History Modal */}
-      {showHistoryModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-2xl p-6 max-h-[80vh] overflow-hidden flex flex-col">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold">Stock History: {selectedItemForHistory?.name}</h3>
-              <button onClick={() => setShowHistoryModal(false)} className="text-gray-500 hover:text-gray-700"><X size={20} /></button>
-            </div>
-            <div className="overflow-y-auto flex-1">
-              {loadingLogs ? (
-                <p>Loading history...</p>
-              ) : (
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Date</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Change</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">New Qty</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Reason</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {logs.map((log) => (
-                      <tr key={log.id}>
-                        <td className="px-4 py-2 text-sm text-gray-500">{new Date(log.created_at).toLocaleString()}</td>
-                        <td className={`px-4 py-2 text-sm font-bold ${log.change_amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {log.change_amount > 0 ? '+' : ''}{log.change_amount}
-                        </td>
-                        <td className="px-4 py-2 text-sm text-gray-900">{log.new_qty}</td>
-                        <td className="px-4 py-2 text-sm text-gray-500">{log.reason}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Category Modal */}
-      {showCategoryModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-md p-6">
-            <h3 className="text-lg font-bold mb-4">{editingCategory ? 'Edit Category' : 'New Category'}</h3>
-            <form onSubmit={handleCategorySubmit}>
+      {
+        showAdjustModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg w-full max-w-md p-6">
+              <h3 className="text-lg font-bold mb-4">Adjust Stock: {selectedItemForAdjust?.name}</h3>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">Name</label>
+                <label className="block text-sm font-medium text-gray-700">Change Amount (+/-)</label>
                 <input
-                  type="text"
-                  required
+                  type="number"
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                  value={catFormData.name}
-                  onChange={(e) => setCatFormData({ ...catFormData, name: e.target.value })}
+                  value={adjustAmount}
+                  onChange={(e) => setAdjustAmount(parseInt(e.target.value))}
                 />
+                <p className="text-xs text-gray-500 mt-1">Positive to add, negative to remove.</p>
               </div>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">Slug</label>
+                <label className="block text-sm font-medium text-gray-700">Reason</label>
                 <input
                   type="text"
-                  required
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                  value={catFormData.slug}
-                  onChange={(e) => setCatFormData({ ...catFormData, slug: e.target.value })}
+                  placeholder="e.g. Restock, Damaged"
+                  value={adjustReason}
+                  onChange={(e) => setAdjustReason(e.target.value)}
                 />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">Parent Category</label>
-                <select
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                  value={catFormData.parent_id}
-                  onChange={(e) => setCatFormData({ ...catFormData, parent_id: e.target.value })}
-                >
-                  <option value="">None (Top Level)</option>
-                  {categories.filter(c => c.id !== editingCategory?.id).map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
               </div>
               <div className="flex justify-end space-x-2">
                 <button
-                  type="button"
-                  onClick={() => setShowCategoryModal(false)}
+                  onClick={() => setShowAdjustModal(false)}
                   className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
                 >
                   Cancel
                 </button>
                 <button
-                  type="submit"
+                  onClick={submitAdjustment}
                   className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                 >
                   Save
                 </button>
               </div>
-            </form>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+
+      {/* History Modal */}
+      {
+        showHistoryModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg w-full max-w-2xl p-6 max-h-[80vh] overflow-hidden flex flex-col">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold">Stock History: {selectedItemForHistory?.name}</h3>
+                <button onClick={() => setShowHistoryModal(false)} className="text-gray-500 hover:text-gray-700"><X size={20} /></button>
+              </div>
+              <div className="overflow-y-auto flex-1">
+                {loadingLogs ? (
+                  <p>Loading history...</p>
+                ) : (
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Date</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Change</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">New Qty</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Reason</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {logs.map((log) => (
+                        <tr key={log.id}>
+                          <td className="px-4 py-2 text-sm text-gray-500">{new Date(log.created_at).toLocaleString()}</td>
+                          <td className={`px-4 py-2 text-sm font-bold ${log.change_amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {log.change_amount > 0 ? '+' : ''}{log.change_amount}
+                          </td>
+                          <td className="px-4 py-2 text-sm text-gray-900">{log.new_qty}</td>
+                          <td className="px-4 py-2 text-sm text-gray-500">{log.reason}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      }
+      {/* Category Modal */}
+      {
+        showCategoryModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg w-full max-w-md p-6">
+              <h3 className="text-lg font-bold mb-4">{editingCategory ? 'Edit Category' : 'New Category'}</h3>
+              <form onSubmit={handleCategorySubmit}>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700">Name</label>
+                  <input
+                    type="text"
+                    required
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                    value={catFormData.name}
+                    onChange={(e) => setCatFormData({ ...catFormData, name: e.target.value })}
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700">Slug</label>
+                  <input
+                    type="text"
+                    required
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                    value={catFormData.slug}
+                    onChange={(e) => setCatFormData({ ...catFormData, slug: e.target.value })}
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700">Parent Category</label>
+                  <select
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                    value={catFormData.parent_id}
+                    onChange={(e) => setCatFormData({ ...catFormData, parent_id: e.target.value })}
+                  >
+                    <option value="">None (Top Level)</option>
+                    {categories.filter(c => c.id !== editingCategory?.id).map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex justify-end space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCategoryModal(false)}
+                    className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  >
+                    Save
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )
+      }
+    </div >
   );
 };
 
