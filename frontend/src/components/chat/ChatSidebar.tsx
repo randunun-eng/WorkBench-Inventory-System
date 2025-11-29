@@ -10,37 +10,38 @@ interface ChatSidebarProps {
     myShopRoomId?: string | null;
     hasUnreadMyShop?: boolean;
     guestChats?: any[];
+    shops: APIShop[];
+    loading?: boolean;
 }
 
-const ChatSidebar: React.FC<ChatSidebarProps> = ({ activeRoomId, onSelectRoom, onlineUsers, myShopRoomId, hasUnreadMyShop, guestChats = [] }) => {
-    const [shops, setShops] = useState<APIShop[]>([]);
-    const [loading, setLoading] = useState(true);
+const ChatSidebar: React.FC<ChatSidebarProps> = ({ activeRoomId, onSelectRoom, onlineUsers, myShopRoomId, hasUnreadMyShop, guestChats = [], shops, loading = false }) => {
+    // Shops are now passed as props
 
-    useEffect(() => {
-        const fetchShops = async () => {
-            try {
-                const allShops = await api.getAllShops();
-                setShops(allShops);
-            } catch (error) {
-                console.error('Failed to fetch shops', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchShops();
-    }, []);
-
-    const isOnline = (username: string) => {
-        return onlineUsers.some(u => u.username === username && u.status === 'ONLINE');
+    const isOnline = (userId: string) => {
+        if (!Array.isArray(onlineUsers)) return false;
+        return onlineUsers.some(u => u.userId === userId && u.status === 'ONLINE');
     };
 
     const handleShopClick = (shop: APIShop) => {
-        onSelectRoom(`chat-${shop.shop_slug}`);
+        if (myShopRoomId) {
+            // Extract my slug from "chat-<slug>"
+            const mySlug = myShopRoomId.replace('chat-', '');
+            const otherSlug = shop.shop_slug;
+
+            // Sort slugs to ensure both parties generate the same Room ID
+            const slugs = [mySlug, otherSlug].sort();
+            const dmRoomId = `dm-${slugs[0]}-${slugs[1]}`;
+
+            onSelectRoom(dmRoomId);
+        } else {
+            // Fallback if not logged in as a shop (e.g. Admin)
+            onSelectRoom(`chat-${shop.shop_slug}`);
+        }
     };
 
     // Filter online users who are NOT in the shops list (e.g. Admins, Guests)
     const otherOnlineUsers = onlineUsers.filter(u =>
-        !shops.some(s => s.shop_name === u.username)
+        !shops.some(s => s.id === u.userId)
     );
 
     return (
@@ -69,10 +70,10 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ activeRoomId, onSelectRoom, o
                     </button>
                 </div> */}
 
-                {/* My Shop */}
-                {myShopRoomId && (
+                {/* My Shop Lobby - REMOVED per user request to reduce confusion */}
+                {/* {myShopRoomId && (
                     <div className="mb-6">
-                        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 mb-2">My Inbox</h3>
+                        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 mb-2">My Shop Lobby</h3>
                         {shops.filter(s => s.shop_slug && `chat-${s.shop_slug}` === myShopRoomId).map(shop => (
                             <button
                                 key={shop.id}
@@ -97,14 +98,13 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ activeRoomId, onSelectRoom, o
                                     <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-white bg-green-500`}></span>
                                 </div>
                                 <span className="truncate">{shop.shop_name}</span>
-                                {/* Unread Badge */}
                                 {hasUnreadMyShop && (
                                     <span className="ml-auto w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
                                 )}
                             </button>
                         ))}
                     </div>
-                )}
+                )} */}
 
                 {/* Customer Inquiries */}
                 {guestChats.length > 0 && (
@@ -143,17 +143,27 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ activeRoomId, onSelectRoom, o
                     <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 mb-2">Active Shops</h3>
                     {loading ? (
                         <div className="px-3 text-sm text-gray-400">Loading network...</div>
+                    ) : !Array.isArray(shops) || shops.length === 0 ? (
+                        <div className="px-3 text-sm text-gray-400 italic">No active shops found.</div>
                     ) : (
                         shops
                             .filter(shop => !myShopRoomId || (shop.shop_slug && `chat-${shop.shop_slug}` !== myShopRoomId))
                             .map(shop => {
-                                const online = isOnline(shop.shop_name);
-                                const roomId = `chat-${shop.shop_slug}`;
+                                const online = isOnline(shop.id);
+                                // Determine if this shop is the active DM
+                                let isActive = false;
+                                if (activeRoomId && activeRoomId.startsWith('dm-')) {
+                                    const parts = activeRoomId.split('-');
+                                    isActive = parts.includes(shop.shop_slug);
+                                } else {
+                                    isActive = activeRoomId === `chat-${shop.shop_slug}`;
+                                }
+
                                 return (
                                     <button
                                         key={shop.id}
                                         onClick={() => handleShopClick(shop)}
-                                        className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-2 text-sm transition-colors ${activeRoomId === roomId
+                                        className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-2 text-sm transition-colors ${isActive
                                             ? 'bg-blue-50 text-brand-blue font-medium'
                                             : 'text-gray-700 hover:bg-gray-50'
                                             }`}
@@ -196,6 +206,18 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ activeRoomId, onSelectRoom, o
                         ))}
                     </div>
                 )}
+            </div>
+            
+            {/* DEBUG SECTION - REMOVE LATER */}
+            <div className="p-2 border-t border-gray-200 text-[10px] text-gray-400 font-mono overflow-hidden">
+                <div>Online: {onlineUsers.length}</div>
+                <div>Shops: {shops.length}</div>
+                <div className="truncate">
+                    Users: {onlineUsers.map(u => `${u.username}(${u.userId.substring(0,4)})`).join(', ')}
+                </div>
+                <div className="truncate">
+                    Shops: {shops.map(s => `${s.shop_name}(${s.id.substring(0,4)})`).join(', ')}
+                </div>
             </div>
         </div>
     );

@@ -44,7 +44,7 @@ export const useChatRoom = (roomId: string | null) => {
                 try {
                     const data = JSON.parse(event.data);
                     if (data.type === 'HISTORY') {
-                        setMessages(data.messages);
+                        setMessages(Array.isArray(data.messages) ? data.messages : []);
                         setIsHistoryLoaded(true);
                     } else if (data.type === 'MESSAGE') {
                         console.log(`[useChatRoom ${roomId}] Received message:`, data.message);
@@ -65,6 +65,15 @@ export const useChatRoom = (roomId: string | null) => {
             };
 
             wsRef.current = ws;
+
+            // Keep-alive ping every 30 seconds
+            const pingInterval = setInterval(() => {
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'PING' }));
+                }
+            }, 30000);
+
+            ws.addEventListener('close', () => clearInterval(pingInterval));
         };
 
         connect();

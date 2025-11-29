@@ -69,7 +69,7 @@ export const usePresence = () => {
                         setChatHistory(prev => [...prev, data.message]);
                         break;
                     case 'HISTORY':
-                        setChatHistory(data.messages);
+                        setChatHistory(Array.isArray(data.messages) ? data.messages : []);
                         break;
                 }
             } catch (e) {

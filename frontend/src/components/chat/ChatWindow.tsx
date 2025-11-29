@@ -5,11 +5,12 @@ import { ChatMessage } from '../../hooks/usePresence';
 
 interface ChatWindowProps {
     roomId: string;
+    shopName?: string;
     messages: ChatMessage[];
     onSendMessage: (content: string, type?: 'TEXT' | 'IMAGE', product?: any) => void;
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, messages, onSendMessage }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, shopName, messages, onSendMessage }) => {
     const [input, setInput] = useState('');
     const [isUploading, setIsUploading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -58,6 +59,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, messages, onSendMessage
     };
 
     const renderMessageContent = (msg: ChatMessage) => {
+        if (!msg.content) return null;
+
         if (msg.type === 'IMAGE' || msg.content.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
             const imageUrl = msg.content.startsWith('http')
                 ? msg.content
@@ -78,13 +81,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ roomId, messages, onSendMessage
             {/* Header */}
             <div className="bg-white border-b border-gray-200 p-4 flex justify-between items-center shadow-sm z-10">
                 <div>
-                    <h2 className="font-bold text-gray-800">#{roomId}</h2>
+                    <h2 className="font-bold text-gray-800">{shopName || `#${roomId}`}</h2>
                 </div>
             </div>
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {messages.map((msg, idx) => {
+                {Array.isArray(messages) && messages.map((msg, idx) => {
+                    if (!msg) return null;
                     const isMe = msg.senderId === currentUserId;
 
                     return (

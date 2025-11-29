@@ -128,6 +128,9 @@ export class ChatRoom extends DurableObject {
                             }));
                         }
                     }
+                } else if (data.type === 'PING') {
+                    // Respond with PONG to keep connection alive
+                    webSocket.send(JSON.stringify({ type: 'PONG' }));
                 }
 
             } catch (err) {

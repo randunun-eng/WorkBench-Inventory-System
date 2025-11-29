@@ -557,9 +557,17 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center gap-3">
               <MessageSquare size={20} /> Chat
             </div>
-            {(hasUnreadMyShop || guestChats.some(c => c.hasUnread)) && (
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-            )}
+            {(() => {
+              const unreadCount = (hasUnreadMyShop ? 1 : 0) + guestChats.filter(c => c.hasUnread).length;
+              if (unreadCount > 0) {
+                return (
+                  <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                    {unreadCount}
+                  </span>
+                );
+              }
+              return null;
+            })()}
           </button>
           <button
             onClick={() => setActiveView('chatbot')}
