@@ -12,6 +12,8 @@ interface ChatProps {
     setMyShopUnreadCount: React.Dispatch<React.SetStateAction<number>>;
     myShopRoomId: string | null;
     myShopSendMessage: (content: string, type?: 'TEXT' | 'IMAGE', product?: any) => void;
+    activeChatRoomId: string | null;
+    setActiveChatRoomId: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 const Chat: React.FC<ChatProps> = ({
@@ -20,9 +22,11 @@ const Chat: React.FC<ChatProps> = ({
     setGlobalGuestChats,
     setMyShopUnreadCount,
     myShopRoomId,
-    myShopSendMessage
+    myShopSendMessage,
+    activeChatRoomId,
+    setActiveChatRoomId
 }) => {
-    const [activeRoomId, setActiveRoomId] = useState<string | null>('general');
+    const [activeRoomId, setActiveRoomId] = useState<string | null>(activeChatRoomId || 'general');
     const [shops, setShops] = useState<APIShop[]>([]);
     const [loadingShops, setLoadingShops] = useState(true);
     const { onlineUsers, chatHistory: generalMessages, sendMessage: sendGeneralMessage } = usePresence();
@@ -111,6 +115,11 @@ const Chat: React.FC<ChatProps> = ({
             }
         }
     }
+
+    // Sync local activeRoomId with parent
+    React.useEffect(() => {
+        setActiveChatRoomId(activeRoomId);
+    }, [activeRoomId, setActiveChatRoomId]);
 
     // Mark as read logic - Clear unread counts when viewing a chat
     React.useEffect(() => {

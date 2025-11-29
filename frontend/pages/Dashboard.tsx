@@ -85,6 +85,7 @@ const Dashboard: React.FC = () => {
 
   // View State
   const [activeView, setActiveView] = useState<'inventory' | 'categories' | 'chat' | 'chatbot' | 'network' | 'vision' | 'admin' | 'settings'>('inventory');
+  const [activeChatRoomId, setActiveChatRoomId] = useState<string | null>(null);
 
   // Category Management State
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -166,6 +167,10 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     if (notifications.length > 0) {
       const latest = notifications[notifications.length - 1];
+
+      // Check if user is currently viewing this chat
+      const isViewingThisChat = activeView === 'chat' && activeChatRoomId === latest.roomId;
+
       setGuestChats(prev => {
         const exists = prev.find(c => c.roomId === latest.roomId);
         let updated;
@@ -174,23 +179,26 @@ const Dashboard: React.FC = () => {
             ...c,
             lastMessage: latest.lastMessage,
             timestamp: latest.timestamp,
-            unreadCount: (c.unreadCount || 0) + 1
+            // Don't increment unread if currently viewing this chat
+            unreadCount: isViewingThisChat ? 0 : (c.unreadCount || 0) + 1
           } : c);
         } else {
-          updated = [...prev, { ...latest, unreadCount: 1 }];
+          updated = [...prev, { ...latest, unreadCount: isViewingThisChat ? 0 : 1 }];
         }
         localStorage.setItem('guest_chats', JSON.stringify(updated));
         return updated;
       });
 
-      // Show browser notification and play sound
-      playNotificationSound();
-      showBrowserNotification(
-        `New message from ${latest.guestName || 'Guest'}`,
-        latest.lastMessage || 'You have a new message'
-      );
+      // Show browser notification and play sound only if not viewing
+      if (!isViewingThisChat) {
+        playNotificationSound();
+        showBrowserNotification(
+          `New message from ${latest.guestName || 'Guest'}`,
+          latest.lastMessage || 'You have a new message'
+        );
+      }
     }
-  }, [notifications]);
+  }, [notifications, activeView, activeChatRoomId]);
 
   // Handle My Shop Messages (Unread)
   useEffect(() => {
@@ -201,8 +209,11 @@ const Dashboard: React.FC = () => {
       if (currentCount > prevCount) {
         const newMessagesCount = currentCount - prevCount;
 
-        // If we are NOT in chat view, increment unread count
-        if (activeView !== 'chat') {
+        // Check if user is viewing the my shop chat
+        const isViewingMyShopChat = activeView === 'chat' && activeChatRoomId === myShopRoomId;
+
+        // Only increment unread count if NOT viewing this chat
+        if (!isViewingMyShopChat) {
           setMyShopUnreadCount(prev => prev + newMessagesCount);
           playNotificationSound();
 
@@ -220,7 +231,7 @@ const Dashboard: React.FC = () => {
     } else {
       prevMessageCountRef.current = myShopMessages.length;
     }
-  }, [myShopMessages.length, isHistoryLoaded, activeView]);
+  }, [myShopMessages.length, isHistoryLoaded, activeView, activeChatRoomId, myShopRoomId]);
 
   // Clear unread when entering chat (simplified)
   // Ideally, Chat component tells us when a room is opened.
@@ -670,6 +681,8 @@ const Dashboard: React.FC = () => {
                       setMyShopUnreadCount={setMyShopUnreadCount}
                       myShopRoomId={myShopRoomId}
                       myShopSendMessage={myShopSendMessage}
+                      activeChatRoomId={activeChatRoomId}
+                      setActiveChatRoomId={setActiveChatRoomId}
                     />
                   )}
 
