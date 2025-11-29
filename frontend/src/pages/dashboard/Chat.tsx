@@ -53,7 +53,7 @@ const Chat: React.FC<ChatProps> = ({
 
     // Determine which messages to show
     let currentMessages: any[] = [];
-    let currentSendMessage: ((message: string) => void) | null = null;
+    let currentSendMessage: ((content: string, type?: 'TEXT' | 'IMAGE', product?: any) => void) | null = null;
 
     if (activeRoomId === 'general') {
         currentMessages = generalMessages;

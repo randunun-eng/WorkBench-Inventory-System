@@ -17,9 +17,18 @@ interface ChatSidebarProps {
 const ChatSidebar: React.FC<ChatSidebarProps> = ({ activeRoomId, onSelectRoom, onlineUsers, myShopRoomId, hasUnreadMyShop, guestChats = [], shops, loading = false }) => {
     // Shops are now passed as props
 
+    // Debug logging
+    React.useEffect(() => {
+        console.log('[ChatSidebar] Online Users:', onlineUsers);
+        console.log('[ChatSidebar] Shops:', shops);
+        console.log('[ChatSidebar] My Shop Room ID:', myShopRoomId);
+    }, [onlineUsers, shops, myShopRoomId]);
+
     const isOnline = (userId: string) => {
         if (!Array.isArray(onlineUsers)) return false;
-        return onlineUsers.some(u => u.userId === userId && u.status === 'ONLINE');
+        const online = onlineUsers.some(u => u.userId === userId && u.status === 'ONLINE');
+        console.log(`[ChatSidebar] Checking if ${userId} is online:`, online, 'Online users:', onlineUsers.map(u => u.userId));
+        return online;
     };
 
     const handleShopClick = (shop: APIShop) => {

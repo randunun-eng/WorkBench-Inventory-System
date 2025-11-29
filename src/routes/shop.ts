@@ -6,10 +6,11 @@ const shop = new Hono<{ Bindings: any }>()
 shop.get('/', async (c) => {
   const shops = await c.env.DB.prepare(`
     SELECT id, shop_name, shop_slug, logo_r2_key
-    FROM users 
+    FROM users
     WHERE is_active = 1 AND is_approved = 1
   `).all()
 
+  console.log('[Shop Route] Returning shops:', shops.results.map((s: any) => ({ id: s.id, shop_name: s.shop_name })))
   return c.json(shops.results)
 })
 

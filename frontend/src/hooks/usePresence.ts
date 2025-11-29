@@ -51,16 +51,22 @@ export const usePresence = () => {
 
                 switch (data.type) {
                     case 'ONLINE_USERS':
-                        console.log('Setting online users:', data.users); // Debug log
+                        console.log('[usePresence] Received ONLINE_USERS:', data.users); // Debug log
                         setOnlineUsers(data.users);
                         break;
                     case 'PRESENCE':
+                        console.log('[usePresence] Received PRESENCE update:', data);
                         setOnlineUsers(prev => {
                             const exists = prev.find(u => u.userId === data.userId);
                             if (data.status === 'ONLINE') {
-                                if (exists) return prev; // Already in list
+                                if (exists) {
+                                    console.log('[usePresence] User already online:', data.userId);
+                                    return prev; // Already in list
+                                }
+                                console.log('[usePresence] Adding online user:', data.userId);
                                 return [...prev, { userId: data.userId, username: data.username, status: 'ONLINE' }];
                             } else {
+                                console.log('[usePresence] Removing offline user:', data.userId);
                                 return prev.filter(u => u.userId !== data.userId);
                             }
                         });

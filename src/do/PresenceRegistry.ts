@@ -58,10 +58,12 @@ export class PresenceRegistry extends DurableObject {
     }
 
     handleSession(webSocket: WebSocket, userId: string, username: string) {
+        console.log('[PresenceRegistry] New session:', { userId, username })
         this.onlineUsers.set(userId, { session: webSocket, username })
         webSocket.accept()
 
         // Broadcast "User Online"
+        console.log('[PresenceRegistry] Broadcasting user online:', { userId, username })
         this.broadcast(JSON.stringify({ type: 'PRESENCE', userId, username, status: 'ONLINE' }))
 
         // Send current online list to new user
@@ -70,6 +72,7 @@ export class PresenceRegistry extends DurableObject {
             username: data.username,
             status: 'ONLINE'
         }))
+        console.log('[PresenceRegistry] Sending online list to new user:', onlineList)
         webSocket.send(JSON.stringify({ type: 'ONLINE_USERS', users: onlineList }))
 
         // Send Chat History
@@ -104,6 +107,7 @@ export class PresenceRegistry extends DurableObject {
         })
 
         webSocket.addEventListener('close', () => {
+            console.log('[PresenceRegistry] User disconnected:', { userId, username })
             this.onlineUsers.delete(userId)
             this.broadcast(JSON.stringify({ type: 'PRESENCE', userId, username, status: 'OFFLINE' }))
         })

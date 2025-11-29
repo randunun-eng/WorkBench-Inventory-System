@@ -63,6 +63,7 @@ export class ChatRoom extends DurableObject {
     }
 
     async handleSession(webSocket: WebSocket, userData: WebSocketData, roomId: string) {
+        console.log('[ChatRoom] New session:', { roomId, userId: userData.userId, username: userData.username })
         this.sessions.set(webSocket, userData)
         webSocket.accept()
 
@@ -70,6 +71,7 @@ export class ChatRoom extends DurableObject {
         await this.cleanup()
         const history = await this.ctx.storage.list({ limit: 50, reverse: true })
         const messages = Array.from(history.values()).reverse()
+        console.log('[ChatRoom] Sending history:', { roomId, messageCount: messages.length })
         webSocket.send(JSON.stringify({ type: 'HISTORY', messages }))
 
         webSocket.addEventListener('message', async (event) => {
@@ -87,11 +89,14 @@ export class ChatRoom extends DurableObject {
                         product: data.product // Store product context
                     }
 
+                    console.log('[ChatRoom] New message:', { roomId, senderId: message.senderId, content: message.content })
+
                     // Store message
                     // Use timestamp as key for sorting
                     await this.ctx.storage.put(message.timestamp.toString(), message)
 
                     // Broadcast
+                    console.log('[ChatRoom] Broadcasting to', this.sessions.size, 'sessions')
                     this.broadcast(JSON.stringify({ type: 'MESSAGE', message }))
 
                     // NOTIFICATION LOGIC
