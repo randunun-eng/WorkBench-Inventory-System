@@ -40,7 +40,7 @@ new_sqlite_classes = ["ChatRoom", "PresenceRegistry"]
 # Environment Variables
 [vars]
 ADMIN_EMAIL = "randunun@gmail.com"
-GEMINI_API_KEY = "AIzaSyCS75wbvV_801MDui4CchQwg5v5jgtqBzM"
+
 
 [observability]
 enabled = true

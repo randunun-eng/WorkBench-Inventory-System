@@ -109,15 +109,42 @@ async function analyzeDatasheet(datasheetKey: string, publicBucket: any, apiKey:
     }
 }
 
-// Helper to call Gemini 1.5 Flash for Chat
-async function callGemini(
+// Helper to call AI (Prioritizes Cloudflare Llama 3 to save tokens, falls back to Gemini)
+async function callAI(
     messages: any[],
     systemPrompt: string,
     apiKey: string,
     jsonMode: boolean = false,
-    fileUris: string[] = []
+    fileUris: string[] = [],
+    aiBinding: any = null
 ): Promise<string> {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+    // 1. Try Cloudflare Llama 3 FIRST (if available and no files)
+    // This saves Gemini tokens for text-only chats (RAG)
+    if (aiBinding && fileUris.length === 0) {
+        try {
+            console.log('Attempting Cloudflare AI (Llama 3) to save tokens...');
+            const llamaMessages = [
+                { role: 'system', content: systemPrompt },
+                ...messages.map(m => ({ role: m.role === 'model' ? 'assistant' : m.role, content: m.content }))
+            ];
+
+            const llamaResponse: any = await aiBinding.run('@cf/meta/llama-3-8b-instruct', {
+                messages: llamaMessages
+            });
+
+            if (llamaResponse && llamaResponse.response) {
+                console.log('Cloudflare AI success');
+                return llamaResponse.response;
+            }
+        } catch (e) {
+            console.error('Cloudflare AI failed, falling back to Gemini:', e);
+        }
+    }
+
+    // 2. Gemini (Primary for files, Fallback for text)
+    // Primary: Gemini 2.5 Flash
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
     // Convert OpenAI-style messages to Gemini format
     const contents = messages.map(msg => {
@@ -199,11 +226,13 @@ ai.post('/generate-specs', async (c) => {
         5. Example Output: { "voltage": "600V", "current": "50A", "package": "TO-247", "type": "IGBT" }
         `
 
-        const content = await callGemini(
+        const content = await callAI(
             [{ role: 'user', content: `Generate technical specifications for: ${productName}` }],
             systemPrompt,
             c.env.GEMINI_API_KEY,
-            true // JSON Mode
+            true, // JSON Mode
+            [],
+            c.env.AI
         );
 
         return c.json({ specifications: JSON.parse(content) })
@@ -249,7 +278,7 @@ ai.post('/analyze-datasheet', async (c) => {
         log('Starting Gemini Upload...');
         const initUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`;
 
-        log(`Init Upload URL: ${initUrl}`);
+        log(`Init Upload URL: ${initUrl.replace(apiKey, '[REDACTED]')}`);
         const initResponse = await fetch(initUrl, {
             method: 'POST',
             headers: {
@@ -316,11 +345,13 @@ ai.post('/analyze-datasheet', async (c) => {
             });
         };
 
-        // Try the latest experimental model first (Gemini 2.0 Flash)
-        let genResponse = await generateWithModel('gemini-2.0-flash-exp');
+        // Try the user-requested model first (Gemini 2.5 Flash)
+        // Note: If this doesn't exist, the fallback logic below will handle it.
+        let genResponse = await generateWithModel('gemini-2.5-flash');
 
-        if (!genResponse.ok && genResponse.status === 404) {
-            log('Gemini 2.0 Flash failed (404). Listing available models to find a fallback...');
+        // Fallback on 404 (Not Found) OR 429 (Rate Limit)
+        if (!genResponse.ok && (genResponse.status === 404 || genResponse.status === 429)) {
+            log(`Primary model failed (${genResponse.status}). Listing available models to find a fallback...`);
             const listModelsUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
             const listResponse = await fetch(listModelsUrl);
 
@@ -329,9 +360,9 @@ ai.post('/analyze-datasheet', async (c) => {
                 const models = listData.models || [];
                 log(`Available Models: ${models.map((m: any) => m.name).join(', ')}`);
 
-                // Find best fallback: prefer 2.0, then 1.5 flash, then 1.5 pro
-                const fallbackModel = models.find((m: any) => m.name.includes('gemini-2.0-flash'))?.name.split('/').pop() ||
-                    models.find((m: any) => m.name.includes('gemini-1.5-flash'))?.name.split('/').pop() ||
+                // Find best fallback: prefer 1.5 flash (stable), then 1.5 pro
+                // Note: We skip 2.0 flash here since it just failed
+                const fallbackModel = models.find((m: any) => m.name.includes('gemini-1.5-flash'))?.name.split('/').pop() ||
                     models.find((m: any) => m.name.includes('gemini-1.5-pro'))?.name.split('/').pop();
 
                 if (fallbackModel) {
@@ -427,7 +458,7 @@ ai.post('/chat', async (c) => {
         `
 
         // 1. First pass: Ask AI what to do (Intent Detection)
-        let content = await callGemini(messages, systemPrompt, c.env.GEMINI_API_KEY, true);
+        let content = await callAI(messages, systemPrompt, c.env.GEMINI_API_KEY, true, [], c.env.AI);
 
         let searchResults: any[] = []
         let performedSearch = false
@@ -619,12 +650,13 @@ ${memoryContext}
                             .slice(0, 3); // Limit to 3 files to be safe
 
                         // Pass 2: Final Response Generation
-                        content = await callGemini(
+                        content = await callAI(
                             [...messages, { role: 'user', content: contextContent }],
                             finalSystemPrompt,
                             c.env.GEMINI_API_KEY,
                             false,
-                            fileUris
+                            fileUris,
+                            c.env.AI
                         );
                     }
                 }
@@ -662,10 +694,13 @@ ${memoryContext}
                     4. Output raw text of the memory.
                     `;
 
-                    const memoryText = await callGemini(
+                    const memoryText = await callAI(
                         [{ role: 'user', content: memoryPrompt }],
                         'You are a memory extractor.',
-                        c.env.GEMINI_API_KEY
+                        c.env.GEMINI_API_KEY,
+                        false,
+                        [],
+                        c.env.AI
                     );
 
                     const cleanMemory = memoryText.trim();
