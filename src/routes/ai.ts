@@ -1,4 +1,6 @@
 import { Hono } from 'hono'
+import { Buffer } from 'node:buffer';
+import pdf from 'pdf-parse';
 import { authMiddleware } from '../auth'
 
 const ai = new Hono<{ Bindings: any, Variables: { user: any } }>()
@@ -351,6 +353,73 @@ ai.post('/analyze-datasheet', async (c) => {
 
         // Fallback on 404 (Not Found) OR 429 (Rate Limit)
         if (!genResponse.ok && (genResponse.status === 404 || genResponse.status === 429)) {
+            log(`Primary model failed (${genResponse.status}). Attempting Cloudflare AI Fallback (Llama 3)...`);
+
+            try {
+                // 1. Download PDF bytes from R2 (we need the buffer for pdf-parse)
+                // Note: 'object.body' is a stream, we need to consume it or fetch again if already consumed.
+                // Since we streamed it to Gemini, we might need to fetch again.
+                const r2Object = await publicBucket.get(datasheetKey);
+                if (!r2Object) throw new Error('Failed to re-fetch datasheet for fallback');
+
+                const pdfBuffer = await r2Object.arrayBuffer();
+
+                // 2. Extract Text using pdf-parse
+                // Assuming 'pdf-parse' is imported as 'pdf' and 'Buffer' is available (e.g., polyfilled or Node.js env)
+                const pdf = await import('pdf-parse'); // Dynamic import for pdf-parse
+                const pdfData = await pdf.default(Buffer.from(pdfBuffer));
+                let extractedText = pdfData.text;
+
+                // 3. Truncate text to fit Llama 3 context (approx 6000 chars ~ 1500 tokens, leaving room for prompt/response)
+                // Llama 3 8b has 8k context, but let's be safe.
+                if (extractedText.length > 15000) {
+                    extractedText = extractedText.substring(0, 15000) + "\n...[Truncated]...";
+                }
+
+                // 4. Call Cloudflare AI
+                const aiBinding = c.env.AI;
+                if (!aiBinding) throw new Error('Cloudflare AI binding not found');
+
+                const systemPrompt = `
+                You are a technical specification extractor.
+                Extract key technical specifications from the provided datasheet text.
+                Output ONLY valid JSON.
+                Format: { "voltage": "...", "current": "...", "package": "...", ... }
+                `;
+
+                const llamaResponse: any = await aiBinding.run('@cf/meta/llama-3-8b-instruct', {
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: `Extract specifications from this datasheet text:\n\n${extractedText}` }
+                    ]
+                });
+
+                if (llamaResponse && llamaResponse.response) {
+                    log('Cloudflare AI Fallback Successful.');
+
+                    // Try to parse JSON from Llama response
+                    let jsonStr = llamaResponse.response;
+                    // Llama might add markdown code blocks
+                    jsonStr = jsonStr.replace(/```json\n|\n```/g, '').trim();
+                    // Or just find the first { and last }
+                    const firstBrace = jsonStr.indexOf('{');
+                    const lastBrace = jsonStr.lastIndexOf('}');
+                    if (firstBrace !== -1 && lastBrace !== -1) {
+                        jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+                    }
+
+                    return c.json({
+                        analysis: jsonStr,
+                        fileUri: fileUri, // Keep the Gemini URI even if we used fallback
+                        model: 'llama-3-8b-instruct (fallback)'
+                    });
+                }
+
+            } catch (fallbackError: any) {
+                log(`Cloudflare Fallback Failed: ${fallbackError.message}`);
+                // Continue to original error handling if fallback fails
+            }
+
             log(`Primary model failed (${genResponse.status}). Listing available models to find a fallback...`);
             const listModelsUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
             const listResponse = await fetch(listModelsUrl);

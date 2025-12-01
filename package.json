@@ -12,6 +12,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241112.0",
+    "@types/pdf-parse": "^1.1.5",
     "typescript": "^5.5.2",
     "vitest": "^1.5.0",
     "wrangler": "^4.51.0"
@@ -23,6 +24,7 @@
     "@types/uuid": "^10.0.0",
     "base64-js": "^1.5.1",
     "hono": "^4.4.7",
+    "pdf-parse": "^2.4.5",
     "uuid": "^13.0.0"
   }
 }
