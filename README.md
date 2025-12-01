@@ -1,208 +1,150 @@
 # WorkBench Inventory System
 
-A complete inventory management system built with React (frontend) and Cloudflare Workers (backend).
+A comprehensive, cloud-native inventory management and shop networking system built with **React** and **Cloudflare Workers**.
 
-## Architecture
+![Status](https://img.shields.io/badge/Status-Live-success)
+![Version](https://img.shields.io/badge/Version-1.0.0-blue)
 
-- **Frontend**: React + Vite + TailwindCSS + React Router
-- **Backend**: Cloudflare Workers + Hono + D1 Database + R2 Storage
-- **Features**: Product listing, shop management, search, authentication, chat, AI features
+## 🚀 Live Demo
+**URL**: https://workbench-inventory.randunun.workers.dev
 
-## Project Structure
+## 📖 Overview
+
+The WorkBench Inventory System is a full-stack application designed to help electronics shops and hobbyists manage their inventory, connect with other shops, and leverage AI for component analysis. It features a modern, responsive frontend and a high-performance, serverless backend.
+
+## ✨ Key Features
+
+### 🏪 Storefront & Inventory
+- **Public Storefront**: Browse products from all registered shops.
+- **Advanced Search**: Real-time, full-text search using SQLite FTS5.
+- **Shop Profiles**: Dedicated pages for each shop with their specific inventory.
+- **Product Management**: Full CRUD capabilities for shop owners.
+- **Image Hosting**: Secure image uploads using Cloudflare R2.
+
+### 🔐 Authentication & Security
+- **Secure Auth**: JWT-based authentication with SHA-256 password hashing.
+- **Shop Registration**: Self-service signup for new shop owners.
+- **Role-Based Access**: Protected routes for inventory management.
+
+### 💬 Real-Time Communication
+- **Live Chat**: Real-time messaging system powered by Cloudflare Durable Objects.
+- **Presence**: See who is online in real-time.
+- **Shop-to-Shop Networking**: Connect with other sellers in the network.
+
+### 🤖 AI & Vision Capabilities
+- **Datasheet Analysis**: AI-powered extraction of specs from component datasheets (PDFs).
+- **Vision Analysis**: Identify components from images using computer vision.
+- **Smart Categorization**: AI suggestions for product categories.
+
+## 🏗 Architecture
+
+The project follows a modern serverless architecture:
+
+### Frontend (`/frontend`)
+- **Framework**: React 18 with Vite
+- **Styling**: Tailwind CSS for responsive design
+- **Routing**: React Router v6
+- **State**: React Hooks + Context API
+
+### Backend (`/src`)
+- **Runtime**: Cloudflare Workers
+- **Framework**: Hono (lightweight web framework)
+- **Database**: Cloudflare D1 (SQLite)
+- **Storage**: Cloudflare R2 (Object Storage)
+- **State**: Durable Objects (for WebSocket/Chat)
+
+## 🛠 Project Structure
 
 ```
 workbench-inventory/
 ├── frontend/                 # React frontend application
 │   ├── src/
-│   │   ├── components/       # React components
-│   │   ├── pages/           # Page components
-│   │   ├── services/        # API service layer
-│   │   └── types.ts         # TypeScript types
-│   ├── dist/                # Built frontend assets
-│   └── package.json
-├── src/                     # Backend API
-│   ├── routes/              # API route handlers
-│   ├── do/                  # Durable Objects
-│   └── index.ts            # Main entry point
-├── migrations/              # Database migrations
-└── wrangler.toml           # Cloudflare Workers config
+│   │   ├── components/       # Reusable UI components
+│   │   ├── pages/           # Route components
+│   │   ├── services/        # API client layer
+│   │   └── types.ts         # TypeScript definitions
+│   └── dist/                # Production build artifacts
+├── src/                     # Cloudflare Workers backend
+│   ├── routes/              # API endpoints (auth, inventory, etc.)
+│   ├── do/                  # Durable Objects (ChatRoom, Presence)
+│   └── index.ts            # Application entry point
+├── migrations/              # D1 Database schemas
+└── wrangler.toml           # Deployment configuration
 ```
 
-## Setup
+## 🚀 Getting Started
 
 ### Prerequisites
-
 - Node.js (v18+)
-- npm or yarn
-- Wrangler CLI (Cloudflare Workers)
+- Cloudflare Wrangler CLI (`npm install -g wrangler`)
 
 ### Installation
 
-1. Install backend dependencies:
-```bash
-npm install
-```
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/randunun-eng/WorkBench-Inventory-System.git
+   cd WorkBench-Inventory-System
+   ```
 
-2. Install frontend dependencies:
-```bash
-cd frontend
-npm install
-```
+2. **Install Backend Dependencies**
+   ```bash
+   npm install
+   ```
 
-### Database Setup
+3. **Install Frontend Dependencies**
+   ```bash
+   cd frontend
+   npm install
+   ```
 
-Initialize the D1 database:
-```bash
-wrangler d1 create workbench-db
-```
+### Local Development
 
-Update `wrangler.toml` with your database ID, then run migrations:
-```bash
-wrangler d1 execute workbench-db --local --file=./migrations/schema.sql
-```
+1. **Start the Backend** (runs on port 8787)
+   ```bash
+   # From root directory
+   npm run dev
+   ```
 
-## Development
+2. **Start the Frontend** (runs on port 3000)
+   ```bash
+   # From frontend directory
+   npm run dev
+   ```
 
-### Running Locally
+   *Note: Ensure `VITE_API_BASE_URL` in `frontend/.env.local` points to `http://localhost:8787`.*
 
-1. **Start the backend**:
-```bash
-npm run dev
-# or
-wrangler dev
-```
+## 📦 Deployment
 
-The backend will run at `http://localhost:8787`
+This project is configured for seamless deployment to Cloudflare Workers.
 
-2. **Build the frontend** (in another terminal):
-```bash
-cd frontend
-npm run build
-```
+1. **Build Frontend**
+   ```bash
+   cd frontend
+   npm run build
+   cd ..
+   ```
 
-The integrated system will serve both frontend and backend at `http://localhost:8787`
+2. **Deploy Worker**
+   ```bash
+   wrangler deploy
+   ```
 
-### Frontend Development
+   *This command deploys the backend code and serves the static frontend assets from the Worker.*
 
-For frontend-only development with hot reload:
-```bash
-cd frontend
-npm run dev
-```
+## 🧪 API Endpoints
 
-This will start the Vite dev server at `http://localhost:3000`
+### Public
+- `GET /api/search?q={query}` - Search products
+- `GET /api/shop/{slug}` - Get shop details
+- `POST /auth/login` - User login
+- `POST /auth/signup` - Register new shop
 
-Make sure to set `VITE_API_BASE_URL=http://localhost:8787` in `frontend/.env.local`
+### Protected (Bearer Token)
+- `GET /api/inventory` - List my items
+- `POST /api/inventory` - Add new item
+- `POST /api/chat` - Send chat message
+- `POST /api/ai` - AI analysis request
 
-## API Endpoints
+## 📄 License
 
-### Public Endpoints
-
-- `GET /api/search?q=<query>` - Search for products
-- `GET /api/shop/:slug` - Get shop details and inventory
-- `POST /auth/signup` - Create new shop account
-- `POST /auth/login` - Login
-
-### Protected Endpoints (require authentication)
-
-- `GET /api/inventory` - List user's inventory
-- `POST /api/inventory` - Create inventory item
-- `GET /api/inventory/:id` - Get item details
-- `PUT /api/inventory/:id` - Update item
-- `DELETE /api/inventory/:id` - Delete item
-- `POST /api/upload` - Upload images
-- `POST /api/chat` - Chat features
-- `GET /api/network` - Network features
-- `POST /api/ai` - AI features
-- `POST /api/vision` - Vision/image analysis
-
-## Deployment
-
-### Deploy to Cloudflare Workers
-
-1. Build the frontend:
-```bash
-cd frontend
-npm run build
-cd ..
-```
-
-2. Deploy:
-```bash
-npm run deploy
-# or
-wrangler deploy
-```
-
-## Environment Variables
-
-### Frontend (.env.local)
-
-```
-VITE_API_BASE_URL=http://localhost:8787
-```
-
-For production, update to your deployed Workers URL.
-
-## Features
-
-### Frontend
-
-- **Storefront**: Browse products by category and shop
-- **Product Details**: View detailed product information
-- **Shop Profiles**: View shop details and inventory
-- **Search**: Full-text search across products
-- **Registration**: Join the WorkBench network as a seller
-- **Responsive Design**: Mobile-first design with Tailwind CSS
-
-### Backend
-
-- **Authentication**: JWT-based auth with secure password hashing
-- **Inventory Management**: CRUD operations for products
-- **Search**: FTS5 full-text search
-- **Image Upload**: R2 storage for product images
-- **Chat**: Real-time chat with Durable Objects
-- **AI Features**: Integration with Cloudflare AI
-- **Vision**: Image analysis capabilities
-
-## Recent Changes
-
-### Integration (2025-11-26)
-
-- Integrated new React frontend with existing Cloudflare Workers backend
-- Created comprehensive API service layer in frontend
-- Updated all components to use real API calls instead of mock data
-- Configured Wrangler to serve frontend assets
-- Fixed React version conflicts
-- Added environment variable configuration
-- Built production-ready assets
-
-## Troubleshooting
-
-### Frontend build fails
-
-Make sure dependencies are installed:
-```bash
-cd frontend
-npm install
-```
-
-### Backend doesn't serve frontend
-
-1. Check that frontend is built: `ls frontend/dist`
-2. Verify wrangler.toml has assets configuration
-3. Restart the dev server
-
-### API calls fail
-
-1. Check CORS configuration in backend
-2. Verify API_BASE_URL in frontend/.env.local
-3. Check browser console for errors
-
-## Contributing
-
-This is a private project. Contact the repository owner for contribution guidelines.
-
-## License
-
-Proprietary - All rights reserved
+Proprietary - All rights reserved.
