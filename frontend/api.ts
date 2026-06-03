@@ -230,6 +230,34 @@ export const api = {
     return await response.json();
   },
 
+  // --- Seller payment settings (marketplace) ---
+  async getPaymentDetails(): Promise<any> {
+    if (!this.token) return null;
+    const response = await fetch(`${API_BASE_URL}/api/payments/details`, {
+      headers: { 'Authorization': `Bearer ${this.token}` }
+    });
+    if (!response.ok) throw new Error('Failed to fetch payment details');
+    return await response.json();
+  },
+
+  async savePaymentDetails(details: any): Promise<any> {
+    if (!this.token) throw new Error('Not authenticated');
+    const response = await fetch(`${API_BASE_URL}/api/payments/details`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.token}` },
+      body: JSON.stringify(details)
+    });
+    if (!response.ok) throw new Error('Failed to save payment details');
+    return await response.json();
+  },
+
+  // Public: a shop's payment info for checkout
+  async getShopPayment(slug: string): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/api/shop/${slug}/payment`);
+    if (!response.ok) return null;
+    return await response.json();
+  },
+
   async uploadImage(file: File, isPrivate: boolean = false): Promise<{ key: string; url: string }> {
     const formData = new FormData();
     formData.append('file', file);
