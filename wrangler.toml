@@ -45,6 +45,10 @@ new_sqlite_classes = ["ChatRoom", "PresenceRegistry"]
 # Environment Variables
 [vars]
 ADMIN_EMAIL = "randunun@gmail.com"
+# LANKAQR manual payments: set LANKAQR_QR_URL to your bank's static merchant
+# QR image URL to enable the upgrade flow. Not secret, so it lives here.
+LANKAQR_MERCHANT_NAME = "WorkBench"
+LANKAQR_QR_URL = ""
 
 # Secrets — DO NOT put values here. Configure via:
 #   wrangler secret put JWT_SECRET       (required, min 16 chars)

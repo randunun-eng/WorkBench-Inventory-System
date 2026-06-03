@@ -59,6 +59,34 @@ export function isAdmin(c: Context, user: any): boolean {
 }
 
 /**
+ * Grant (or extend) a Pro subscription for `days` and log the event.
+ * Returns the new ISO expiry. Used by manual grants and approved LANKAQR
+ * payments. Extends from the later of "now" and the current expiry so
+ * renewals stack instead of truncating remaining time.
+ */
+export async function grantPro(
+    db: any,
+    userId: string,
+    days = 30,
+    eventType = 'manual_grant'
+): Promise<string> {
+    const row = await db.prepare('SELECT plan_expires_at FROM users WHERE id = ?').bind(userId).first()
+    const current = row?.plan_expires_at ? new Date(row.plan_expires_at).getTime() : 0
+    const base = Math.max(Date.now(), isNaN(current) ? 0 : current)
+    const expires = new Date(base + days * 24 * 60 * 60 * 1000).toISOString()
+
+    await db.batch([
+        db.prepare(
+            `UPDATE users SET plan='pro', plan_status='active',
+             plan_started_at=COALESCE(plan_started_at, CURRENT_TIMESTAMP),
+             plan_expires_at=? WHERE id=?`
+        ).bind(expires, userId),
+        db.prepare(`INSERT INTO subscription_events (user_id, event_type) VALUES (?, ?)`).bind(userId, eventType),
+    ])
+    return expires
+}
+
+/**
  * Middleware: require an active Pro plan. Must run AFTER authMiddleware
  * (it reads c.get('user')). Returns 402 Payment Required with an upgrade
  * hint when the user is on Free.
