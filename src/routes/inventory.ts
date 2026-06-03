@@ -31,6 +31,14 @@ inventory.post('/', async (c) => {
     `).bind(name, parseInt(category_id) || null).first()
 
     let catalogItemId: string
+    const shopInventoryId = uuidv4()
+
+    const shopInventoryStmt = c.env.DB.prepare(`
+      INSERT INTO shop_inventory (
+        id, shop_id, catalog_item_id, stock_qty, restock_threshold,
+        price, landing_cost, currency, is_visible_to_network, shareable_qty
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
 
     if (existingItem) {
       // Item exists in catalog, just add shop inventory
@@ -45,15 +53,37 @@ inventory.post('/', async (c) => {
       if (existingShopItem) {
         return c.json({ error: 'You already have this item in your inventory' }, 409)
       }
+
+      await shopInventoryStmt.bind(
+        shopInventoryId,
+        user.uid,
+        catalogItemId,
+        parseInt(stock_qty) || 0,
+        parseInt(restock_threshold) || 5,
+        price ? parseFloat(price) : null,
+        landing_cost ? parseFloat(landing_cost) : null,
+        currency || 'LKR',
+        is_visible_to_network ? 1 : 0,
+        parseInt(shareable_qty) || 0
+      ).run()
     } else {
-      // Create new catalog item
+      // New catalog item: insert both rows atomically. If the second insert
+      // fails for any reason we don't want a half-created catalog row
+      // visible to every other shop with zero stock and no owner.
       catalogItemId = uuidv4()
-      await c.env.DB.prepare(`
+
+      // Stamp gemini_uploaded_at when we receive a fresh URI so the chat
+      // route's staleness check has a baseline. Without this, every newly
+      // created item with a datasheet would be considered "expired" and
+      // re-uploaded on the first chat that surfaces it.
+      const catalogStmt = c.env.DB.prepare(`
         INSERT INTO catalog_items (
           id, category_id, name, description, specifications,
           datasheet_r2_key, primary_image_r2_key,
-          created_by_user_id, is_public, gemini_file_uri
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          created_by_user_id, is_public, gemini_file_uri,
+          gemini_uploaded_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          CASE WHEN ? IS NOT NULL THEN CURRENT_TIMESTAMP ELSE NULL END)
       `).bind(
         catalogItemId,
         parseInt(category_id) || null,
@@ -64,29 +94,25 @@ inventory.post('/', async (c) => {
         primary_image_r2_key || null,
         user.uid,
         is_public ? 1 : 0,
+        gemini_file_uri || null,
         gemini_file_uri || null
-      ).run()
-    }
+      )
 
-    // Create shop inventory entry
-    const shopInventoryId = uuidv4()
-    await c.env.DB.prepare(`
-      INSERT INTO shop_inventory (
-        id, shop_id, catalog_item_id, stock_qty, restock_threshold,
-        price, landing_cost, currency, is_visible_to_network, shareable_qty
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      shopInventoryId,
-      user.uid,
-      catalogItemId,
-      parseInt(stock_qty) || 0,
-      parseInt(restock_threshold) || 5,
-      price ? parseFloat(price) : null,
-      landing_cost ? parseFloat(landing_cost) : null,
-      currency || 'LKR',
-      is_visible_to_network ? 1 : 0,
-      parseInt(shareable_qty) || 0
-    ).run()
+      const inventoryStmt = shopInventoryStmt.bind(
+        shopInventoryId,
+        user.uid,
+        catalogItemId,
+        parseInt(stock_qty) || 0,
+        parseInt(restock_threshold) || 5,
+        price ? parseFloat(price) : null,
+        landing_cost ? parseFloat(landing_cost) : null,
+        currency || 'LKR',
+        is_visible_to_network ? 1 : 0,
+        parseInt(shareable_qty) || 0
+      )
+
+      await c.env.DB.batch([catalogStmt, inventoryStmt])
+    }
 
     return c.json({
       id: catalogItemId,
@@ -113,7 +139,6 @@ inventory.get('/', async (c) => {
       c.specifications,
       c.datasheet_r2_key,
       c.primary_image_r2_key,
-      c.created_by_user_id,
       c.created_by_user_id,
       c.is_public,
       c.gemini_file_uri,
@@ -208,6 +233,10 @@ inventory.put('/:id', async (c) => {
           primary_image_r2_key = COALESCE(?, primary_image_r2_key),
           is_public = COALESCE(?, is_public),
           gemini_file_uri = COALESCE(?, gemini_file_uri),
+          gemini_uploaded_at = CASE
+            WHEN ? IS NOT NULL THEN CURRENT_TIMESTAMP
+            ELSE gemini_uploaded_at
+          END,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `).bind(
@@ -218,6 +247,7 @@ inventory.put('/:id', async (c) => {
         primary_image_r2_key ?? null,
         is_public !== undefined ? (is_public ? 1 : 0) : null,
         gemini_file_uri ?? null,
+        gemini_file_uri ?? null, // second bind for the CASE expression
         id
       ).run()
     }

@@ -48,7 +48,7 @@ seo.get('/product/:id', async (c) => {
     // Ideally, we should have a public bucket domain.
     const image = item.primary_image_r2_key
       ? `https://pub-840623668b9b4097945d73500350720b.r2.dev/${item.primary_image_r2_key}`
-      : 'https://workbench-inventory.randunun.workers.dev/assets/og-placeholder.png'
+      : `${new URL(c.req.url).origin}/assets/og-placeholder.png`
 
     // Inject Title
     html = html.replace(/<title>.*<\/title>/, `<title>${title}</title>`)

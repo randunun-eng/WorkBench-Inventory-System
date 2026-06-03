@@ -66,7 +66,6 @@ const Dashboard: React.FC = () => {
     currency: 'LKR',
     is_public: false,
     is_visible_to_network: false,
-    is_visible_to_network: false,
     shareable_qty: '0',
     gemini_file_uri: ''
   });
@@ -615,7 +614,6 @@ const Dashboard: React.FC = () => {
       currency: item.currency || 'LKR',
       is_public: Boolean(item.is_public),
       is_visible_to_network: Boolean(item.is_visible_to_network),
-      is_visible_to_network: Boolean(item.is_visible_to_network),
       shareable_qty: item.shareable_qty?.toString() || '0',
       gemini_file_uri: item.gemini_file_uri || ''
     });
@@ -633,7 +631,6 @@ const Dashboard: React.FC = () => {
       price: '',
       currency: 'LKR',
       is_public: false,
-      is_visible_to_network: false,
       is_visible_to_network: false,
       shareable_qty: '0',
       gemini_file_uri: ''

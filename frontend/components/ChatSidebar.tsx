@@ -65,7 +65,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ isOpen, onClose, shop, produc
         }
 
         const connect = () => {
-            const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://workbench-inventory.randunun.workers.dev';
+            const baseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin;
             // Use shop slug + guest ID as room ID for private chat
             const roomId = `chat-${shop.slug}-${guestId}`;
             const wsUrl = new URL(`${baseUrl}/api/chat/room/${roomId}`);

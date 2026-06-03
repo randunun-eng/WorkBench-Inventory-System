@@ -2,7 +2,7 @@
 
 ## 🎉 Successfully Deployed to Cloudflare!
 
-**Production URL**: https://workbench-inventory.randunun.workers.dev
+**Production URL**: https://workbench-inventory.randunu-4oc.workers.dev
 
 **Deployment Date**: November 26, 2025
 
@@ -43,9 +43,9 @@
 ## 🔗 Available Endpoints
 
 ### Frontend Routes
-- **Homepage/Storefront**: https://workbench-inventory.randunun.workers.dev/
-- **Product Detail**: https://workbench-inventory.randunun.workers.dev/product/:id
-- **Join/Registration**: https://workbench-inventory.randunun.workers.dev/join
+- **Homepage/Storefront**: https://workbench-inventory.randunu-4oc.workers.dev/
+- **Product Detail**: https://workbench-inventory.randunu-4oc.workers.dev/product/:id
+- **Join/Registration**: https://workbench-inventory.randunu-4oc.workers.dev/join
 
 ### API Endpoints
 
@@ -78,7 +78,7 @@ POST   /api/vision                  - Vision/image analysis
 
 ### 1. Test API Status
 ```bash
-curl https://workbench-inventory.randunun.workers.dev/api
+curl https://workbench-inventory.randunu-4oc.workers.dev/api
 ```
 
 Expected response:
@@ -90,18 +90,18 @@ Expected response:
 ```
 
 ### 2. Test Frontend
-Visit: https://workbench-inventory.randunun.workers.dev/
+Visit: https://workbench-inventory.randunu-4oc.workers.dev/
 
 You should see the WorkBench storefront.
 
 ### 3. Test Registration
-1. Visit: https://workbench-inventory.randunun.workers.dev/join
+1. Visit: https://workbench-inventory.randunu-4oc.workers.dev/join
 2. Fill in shop details
 3. Create an account
 
 ### 4. Test Search (when products exist)
 ```bash
-curl "https://workbench-inventory.randunun.workers.dev/api/search?q=semiconductor"
+curl "https://workbench-inventory.randunu-4oc.workers.dev/api/search?q=semiconductor"
 ```
 
 ---
@@ -119,13 +119,13 @@ To see products in your storefront, you need to:
 Example: Adding a product
 ```bash
 # First, login to get a token
-TOKEN=$(curl -X POST https://workbench-inventory.randunun.workers.dev/auth/login \
+TOKEN=$(curl -X POST https://workbench-inventory.randunu-4oc.workers.dev/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"your@email.com","password":"yourpassword"}' \
   | jq -r '.token')
 
 # Then add a product
-curl -X POST https://workbench-inventory.randunun.workers.dev/api/inventory \
+curl -X POST https://workbench-inventory.randunu-4oc.workers.dev/api/inventory \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
@@ -195,7 +195,7 @@ wrangler deploy
 
 Frontend (`frontend/.env.production`):
 ```
-VITE_API_BASE_URL=https://workbench-inventory.randunun.workers.dev
+VITE_API_BASE_URL=https://workbench-inventory.randunu-4oc.workers.dev
 ```
 
 ### Database Migrations

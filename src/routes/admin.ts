@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { verifyToken } from '../auth'
+import { verifyToken, getJwtSecret } from '../auth'
 
 const admin = new Hono<{ Bindings: any }>()
 
@@ -8,8 +8,15 @@ const adminMiddleware = async (c: any, next: any) => {
     const authHeader = c.req.header('Authorization')
     if (!authHeader) return c.json({ error: 'Unauthorized' }, 401)
 
+    let secret: string
+    try {
+        secret = getJwtSecret(c.env)
+    } catch (e: any) {
+        return c.json({ error: 'Server misconfigured', details: e.message }, 500)
+    }
+
     const token = authHeader.split(' ')[1]
-    const user = await verifyToken(token)
+    const user = await verifyToken(token, secret)
 
     if (!user) return c.json({ error: 'Invalid token' }, 401)
 

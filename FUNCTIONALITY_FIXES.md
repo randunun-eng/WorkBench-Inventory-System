@@ -181,11 +181,11 @@ Response: { token, user }
 
 ```bash
 # Frontend loads
-curl https://workbench-inventory.randunun.workers.dev/
+curl https://workbench-inventory.randunu-4oc.workers.dev/
 Result: JavaScript bundle found ✓
 
 # API returns products
-curl https://workbench-inventory.randunun.workers.dev/api/search?q=
+curl https://workbench-inventory.randunu-4oc.workers.dev/api/search?q=
 Result: 9 products ✓
 
 # Login API works
@@ -261,7 +261,7 @@ Result: {"token":"...","user":{"shop_name":"Metro Electronics"}} ✓
 
 ## Live System
 
-**URL**: https://workbench-inventory.randunun.workers.dev
+**URL**: https://workbench-inventory.randunu-4oc.workers.dev
 **Version**: 067e1c6d-62e2-4648-9a99-43af9cfecadf
 
 ### Features Now Working:

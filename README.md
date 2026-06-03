@@ -6,7 +6,7 @@ A comprehensive, cloud-native inventory management and shop networking system bu
 ![Version](https://img.shields.io/badge/Version-1.0.0-blue)
 
 ## 🚀 Live Demo
-**URL**: https://workbench-inventory.randunun.workers.dev
+**URL**: https://workbench-inventory.randunu-4oc.workers.dev
 
 ## 📖 Overview
 

@@ -3,6 +3,28 @@ import { authMiddleware } from '../auth'
 
 const ai = new Hono<{ Bindings: any, Variables: { user: any } }>()
 
+/**
+ * Heuristic gate for memory extraction. Returns true only for messages that
+ * plausibly contain a durable preference or fact about the user — long-form
+ * statements with first-person pronouns and a stance verb. Everything else
+ * (quick searches, single-word lookups, follow-ups like "price?") is filtered
+ * out before we spend an AI call on extraction.
+ */
+function shouldExtractMemory(message: string): boolean {
+    if (typeof message !== 'string') return false
+    const trimmed = message.trim()
+    if (trimmed.length < 30) return false
+    // First-person + stance/action verb → likely a preference or context.
+    if (/\b(I|my|me|we|our)\b.*\b(prefer|like|love|hate|need|use|build|run|own|manage|work|focus|specialise|specialize|always|usually)\b/i.test(trimmed)) {
+        return true
+    }
+    // "I'm building/working/using X for Y" patterns.
+    if (/\bI'?m\s+(working|building|making|using|trying|designing)\b/i.test(trimmed)) {
+        return true
+    }
+    return false
+}
+
 // Helper function to fetch and analyze datasheet
 // Helper to upload file to Gemini File API
 async function uploadToGemini(fileData: ArrayBuffer, mimeType: string, apiKey: string): Promise<string> {
@@ -109,19 +131,62 @@ async function analyzeDatasheet(datasheetKey: string, publicBucket: any, apiKey:
     }
 }
 
+/**
+ * Re-upload an R2-stored datasheet to Gemini's File API and persist the new
+ * URI + upload timestamp in catalog_items. Gemini files expire after ~48h,
+ * so URIs stored in the DB need refreshing periodically.
+ *
+ * Returns the fresh { uri, mimeType } on success, or null on any failure
+ * (caller should skip that item rather than abort the whole chat).
+ */
+async function refreshGeminiFile(
+    catalogItemId: string,
+    datasheetKey: string,
+    publicBucket: any,
+    db: any,
+    apiKey: string
+): Promise<{ uri: string; mimeType: string } | null> {
+    try {
+        const object = await publicBucket.get(datasheetKey)
+        if (!object) {
+            console.warn(`R2 object missing for ${datasheetKey}; skipping`)
+            return null
+        }
+        const mimeType = object.httpMetadata?.contentType || 'application/pdf'
+        const fileData = await object.arrayBuffer()
+        const uri = await uploadToGemini(fileData, mimeType, apiKey)
+
+        // Persist the fresh URI + mime + timestamp so the next chat reuses it
+        // until the next 24h window closes.
+        await db.prepare(`
+            UPDATE catalog_items
+            SET gemini_file_uri = ?, gemini_mime_type = ?, gemini_uploaded_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        `).bind(uri, mimeType, catalogItemId).run()
+
+        return { uri, mimeType }
+    } catch (e) {
+        console.error(`refreshGeminiFile failed for ${catalogItemId}:`, e)
+        return null
+    }
+}
+
+/** Per-file reference passed to Gemini (uri + its actual mime type). */
+type GeminiFileRef = { uri: string; mimeType: string }
+
 // Helper to call AI (Prioritizes Cloudflare Llama 3 to save tokens, falls back to Gemini)
 async function callAI(
     messages: any[],
     systemPrompt: string,
     apiKey: string,
     jsonMode: boolean = false,
-    fileUris: string[] = [],
+    fileRefs: GeminiFileRef[] = [],
     aiBinding: any = null
 ): Promise<string> {
 
     // 1. Try Cloudflare Llama 3 FIRST (if available and no files)
     // This saves Gemini tokens for text-only chats (RAG)
-    if (aiBinding && fileUris.length === 0) {
+    if (aiBinding && fileRefs.length === 0) {
         try {
             console.log('Attempting Cloudflare AI (Llama 3) to save tokens...');
             const llamaMessages = [
@@ -146,7 +211,10 @@ async function callAI(
     // Primary: Gemini 2.5 Flash
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
-    // Convert OpenAI-style messages to Gemini format
+    // Convert OpenAI-style messages to Gemini format. The type predicate on
+    // .filter narrows the result so downstream code can index into it without
+    // a `possibly null` complaint from TypeScript.
+    type GeminiContent = { role: string; parts: any[] }
     const contents = messages.map(msg => {
         let role = 'user';
         if (msg.role === 'assistant') role = 'model';
@@ -155,14 +223,16 @@ async function callAI(
             role: role,
             parts: [{ text: msg.content }]
         };
-    }).filter(Boolean);
+    }).filter((c): c is GeminiContent => c !== null);
 
-    // Attach files to the last user message or create a new one
-    if (fileUris.length > 0) {
-        const fileParts = fileUris.map(uri => ({
+    // Attach files to the last user message or create a new one. Each file
+    // carries its own mime type — never assume PDF, since datasheets are
+    // often uploaded as images (PNG/JPG).
+    if (fileRefs.length > 0) {
+        const fileParts = fileRefs.map(ref => ({
             file_data: {
-                mime_type: 'application/pdf', // Assuming PDF for now, can be dynamic if needed
-                file_uri: uri
+                mime_type: ref.mimeType,
+                file_uri: ref.uri
             }
         }));
 
@@ -492,6 +562,8 @@ ai.post('/chat', async (c) => {
                             c.specifications,
                             c.datasheet_r2_key,
                             c.gemini_file_uri,
+                            c.gemini_uploaded_at,
+                            c.gemini_mime_type,
                             si.stock_qty,
                             si.price,
                             si.currency,
@@ -513,6 +585,8 @@ ai.post('/chat', async (c) => {
                             c.specifications,
                             c.datasheet_r2_key,
                             c.gemini_file_uri,
+                            c.gemini_uploaded_at,
+                            c.gemini_mime_type,
                             si.stock_qty,
                             si.price,
                             si.currency,
@@ -535,6 +609,8 @@ ai.post('/chat', async (c) => {
                             c.specifications,
                             c.datasheet_r2_key,
                             c.gemini_file_uri,
+                            c.gemini_uploaded_at,
+                            c.gemini_mime_type,
                             si.stock_qty,
                             si.price,
                             si.currency,
@@ -643,11 +719,44 @@ ${memoryContext}
                         You: "Yes, we have 15T14 available at ElectroFix for LKR 350. You can view it here: [View 15T14](/#/product/123)"
                         `;
 
-                        // Collect File URIs
-                        const fileUris = searchResults
-                            .map(r => r.gemini_file_uri)
-                            .filter(uri => uri && typeof uri === 'string')
-                            .slice(0, 3); // Limit to 3 files to be safe
+                        // Collect File URIs, refreshing any stale ones first.
+                        // Gemini's File API expires uploads after ~48h, so we
+                        // re-upload from R2 whenever the cached URI is older
+                        // than 24h (or has no timestamp, i.e. legacy data).
+                        const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000
+                        const now = Date.now()
+
+                        const candidateItems = searchResults
+                            .filter(r => r.datasheet_r2_key && typeof r.datasheet_r2_key === 'string')
+                            .slice(0, 3) // Limit to 3 files to be safe
+
+                        const fileRefs: GeminiFileRef[] = []
+                        for (const item of candidateItems) {
+                            const uploadedAt = item.gemini_uploaded_at
+                                ? new Date(item.gemini_uploaded_at).getTime()
+                                : 0
+                            const isStale = !item.gemini_file_uri || (now - uploadedAt) > STALE_THRESHOLD_MS
+
+                            if (!isStale) {
+                                fileRefs.push({
+                                    uri: item.gemini_file_uri,
+                                    mimeType: item.gemini_mime_type || 'application/pdf'
+                                })
+                                continue
+                            }
+
+                            // Refresh in-line. Failure is non-fatal: we just
+                            // skip the file and let the AI work with the
+                            // search-results JSON it already has.
+                            const refreshed = await refreshGeminiFile(
+                                item.id,
+                                item.datasheet_r2_key,
+                                c.env.PUBLIC_BUCKET,
+                                c.env.DB,
+                                c.env.GEMINI_API_KEY
+                            )
+                            if (refreshed) fileRefs.push(refreshed)
+                        }
 
                         // Pass 2: Final Response Generation
                         content = await callAI(
@@ -655,7 +764,7 @@ ${memoryContext}
                             finalSystemPrompt,
                             c.env.GEMINI_API_KEY,
                             false,
-                            fileUris,
+                            fileRefs,
                             c.env.AI
                         );
                     }
@@ -674,8 +783,14 @@ ${memoryContext}
 
         c.header('X-Debug-Version', 'v7-gemini-flash');
 
-        // 5. Background Memory Extraction (Only if logged in)
-        if (user) {
+        // 5. Background Memory Extraction (Only if logged in AND the message
+        // looks like it contains a preference / fact worth remembering).
+        //
+        // Most chat turns are quick searches ("do you have X?", "price?") that
+        // contain nothing memorable. Running the extraction LLM on every turn
+        // doubled our outbound AI calls for zero benefit. We gate it on a
+        // first-person preference signal and minimum length.
+        if (user && shouldExtractMemory(messages[messages.length - 1].content)) {
             c.executionCtx.waitUntil((async () => {
                 try {
                     const lastUserMessage = messages[messages.length - 1].content;
@@ -683,10 +798,10 @@ ${memoryContext}
 
                     const memoryPrompt = `
                     Analyze this interaction and extract any PERMANENT facts or preferences about the user.
-                    
+
                     User: "${lastUserMessage}"
                     AI: "${lastAiResponse}"
-                    
+
                     Rules:
                     1. Extract ONLY facts (e.g., "User prefers Shop X", "User needs 600V parts").
                     2. Ignore transient questions (e.g., "Do you have this?", "Price?").
@@ -694,6 +809,7 @@ ${memoryContext}
                     4. Output raw text of the memory.
                     `;
 
+                    // No fileRefs → callAI uses free Cloudflare Llama, not Gemini.
                     const memoryText = await callAI(
                         [{ role: 'user', content: memoryPrompt }],
                         'You are a memory extractor.',

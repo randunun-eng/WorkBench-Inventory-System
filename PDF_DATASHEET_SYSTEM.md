@@ -304,7 +304,7 @@ We have 16 units in stock at LKR 352 each from ElectroFix Components.
 ### Test 2: Search with Pre-Extracted Specs
 
 ```bash
-curl -X POST https://workbench-inventory.randunun.workers.dev/api/ai/chat \
+curl -X POST https://workbench-inventory.randunu-4oc.workers.dev/api/ai/chat \
   -H "Content-Type: application/json" \
   -d '{"messages": [{"role": "user", "content": "find 150v mosfet"}]}'
 ```
@@ -329,7 +329,7 @@ curl -X POST https://workbench-inventory.randunun.workers.dev/api/ai/chat \
 ### Test 3: Frontend Display
 
 ```bash
-1. Go to https://workbench-inventory.randunun.workers.dev
+1. Go to https://workbench-inventory.randunu-4oc.workers.dev
 2. Open Chatbot tab
 3. Type: "find 150v mosfet"
 4. Should see:
@@ -445,7 +445,7 @@ src/
 ## Deployment
 
 **Status:** ✅ Deployed to production
-**URL:** https://workbench-inventory.randunun.workers.dev
+**URL:** https://workbench-inventory.randunu-4oc.workers.dev
 **Version:** v5-pdf-datasheet-system
 **Date:** November 27, 2025
 

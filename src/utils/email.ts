@@ -25,7 +25,7 @@ Action Required:
 ----------------
 Please review and approve this shop registration.
 
-View Shop: https://workbench-inventory.randunun.workers.dev/api/shop/${data.shopSlug}
+View Shop: https://workbench-inventory.randunu-4oc.workers.dev/api/shop/${data.shopSlug}
 
 ---
 This is an automated notification from WorkBench Inventory System.
@@ -165,7 +165,7 @@ export async function sendAdminNotificationResend(
 
       <p><strong>Action Required:</strong> Please review and approve this shop registration.</p>
 
-      <a href="https://workbench-inventory.randunun.workers.dev/api/shop/${data.shopSlug}" class="button">
+      <a href="https://workbench-inventory.randunu-4oc.workers.dev/api/shop/${data.shopSlug}" class="button">
         View Shop Details
       </a>
     </div>
@@ -190,7 +190,7 @@ Shop Details:
 
 Action Required: Please review and approve this shop registration.
 
-View Shop: https://workbench-inventory.randunun.workers.dev/api/shop/${data.shopSlug}
+View Shop: https://workbench-inventory.randunu-4oc.workers.dev/api/shop/${data.shopSlug}
         `
       })
     });

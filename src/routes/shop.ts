@@ -77,7 +77,7 @@ shop.get('/:slug', async (c) => {
   })
 })
 
-import { verifyToken } from '../auth'
+import { verifyToken, getJwtSecret } from '../auth'
 
 async function hashPassword(password: string): Promise<string> {
   const msgBuffer = new TextEncoder().encode(password);
@@ -91,7 +91,13 @@ shop.put('/profile', async (c) => {
   const authHeader = c.req.header('Authorization')
   if (!authHeader) return c.json({ error: 'Unauthorized' }, 401)
   const token = authHeader.split(' ')[1]
-  const user = await verifyToken(token)
+  let secret: string
+  try {
+      secret = getJwtSecret(c.env)
+  } catch (e: any) {
+      return c.json({ error: 'Server misconfigured', details: e.message }, 500)
+  }
+  const user = await verifyToken(token, secret)
   if (!user) return c.json({ error: 'Invalid token' }, 401)
 
   const { shop_name, contact_info, location, password, logo_r2_key } = await c.req.json()
