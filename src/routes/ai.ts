@@ -548,13 +548,29 @@ ai.post('/chat', async (c) => {
 
                     let cleanQuery = '';
                     if (command.type === 'SEARCH') cleanQuery = command.query.replace(/"/g, '');
-                    if (command.type === 'COMPARE') cleanQuery = command.items.join(' OR '); // Simple OR search for now
+                    if (command.type === 'COMPARE') cleanQuery = command.items.join(' '); // tokens are OR'd downstream
                     if (command.type === 'SELECT') cleanQuery = command.criteria; // Search by criteria
 
-                    console.log('Executing FTS Search:', cleanQuery);
+                    console.log('Executing Search:', cleanQuery);
 
-                    // 1. Execute FTS Search (Public Items from Shared Catalog)
-                    const ftsResults = await c.env.DB.prepare(`
+                    // Tokenize so multi-word queries (e.g. "2SC3866 transistor") don't
+                    // require EVERY term to match: OR the tokens in FTS, plus a per-token
+                    // LIKE pass below, so an exact part-number token still matches even
+                    // when the user appends a type word.
+                    const STOPWORDS = new Set(['or','and','the','a','an','for','with','of','to','in','is','are','do','you','have'])
+                    const queryTokens = cleanQuery
+                        .split(/\s+/)
+                        .map((t: string) => t.trim())
+                        .filter((t: string) => t.length >= 2 && !STOPWORDS.has(t.toLowerCase()))
+                    const effectiveTokens = queryTokens.length > 0 ? queryTokens : [cleanQuery]
+                    const ftsQuery = effectiveTokens.map((t: string) => `"${t.replace(/"/g, '')}"`).join(' OR ')
+                    const likeClauses = effectiveTokens.map(() => '(c.name LIKE ? OR c.description LIKE ?)').join(' OR ')
+                    const likeBinds = effectiveTokens.flatMap((t: string) => [`%${t}%`, `%${t}%`])
+
+                    // 1. Execute FTS Search (Public Items from Shared Catalog), OR'd tokens
+                    let ftsResults: any = { results: [] }
+                    try {
+                    ftsResults = await c.env.DB.prepare(`
                         SELECT
                             c.id,
                             c.name,
@@ -573,8 +589,9 @@ ai.post('/chat', async (c) => {
                         LEFT JOIN shop_inventory si ON c.id = si.catalog_item_id AND si.is_visible_to_network = 1
                         LEFT JOIN users u ON si.shop_id = u.id
                         WHERE catalog_fts MATCH ? AND c.is_public = 1
-                        LIMIT 5
-                    `).bind(cleanQuery).all();
+                        LIMIT 8
+                    `).bind(ftsQuery).all();
+                    } catch (e) { console.error('FTS query failed (continuing with LIKE passes):', e) }
 
                     // 2. Execute Category Search (Find items in matching categories)
                     const categoryResults = await c.env.DB.prepare(`
@@ -622,11 +639,28 @@ ai.post('/chat', async (c) => {
                         LIMIT 5
                     `).bind(`%${cleanQuery}%`, `%${cleanQuery}%`).all();
 
-                    // 4. Merge and Deduplicate Results
+                    // 3b. Per-token LIKE search — catches an exact part number (e.g. a
+                    // bare "2SC3866") even when the user added a type word that the
+                    // strict full-phrase pass would miss.
+                    const tokenResults = await c.env.DB.prepare(`
+                        SELECT
+                            c.id, c.name, c.description, c.specifications, c.datasheet_r2_key,
+                            c.gemini_file_uri, c.gemini_uploaded_at, c.gemini_mime_type,
+                            si.stock_qty, si.price, si.currency, u.shop_name
+                        FROM catalog_items c
+                        LEFT JOIN shop_inventory si ON c.id = si.catalog_item_id AND si.is_visible_to_network = 1
+                        LEFT JOIN users u ON si.shop_id = u.id
+                        WHERE (${likeClauses}) AND c.is_public = 1
+                        LIMIT 8
+                    `).bind(...likeBinds).all();
+
+                    // 4. Merge and Deduplicate — strongest signal first:
+                    //    exact phrase > FTS tokens > any-token LIKE > category
                     const allResults = [
+                        ...(descriptionResults.results || []),
                         ...(ftsResults.results || []),
-                        ...(categoryResults.results || []),
-                        ...(descriptionResults.results || [])
+                        ...(tokenResults.results || []),
+                        ...(categoryResults.results || [])
                     ];
                     const uniqueMap = new Map();
                     for (const item of allResults) {
@@ -688,12 +722,13 @@ Technical Specs:
 ${technicalDetails}
 
 CRITICAL INSTRUCTIONS:
-- You are a strict inventory assistant.
-- Answer the user's question using ONLY the JSON data above.
+- For PRICES, STOCK, SHOP NAMES and LINKS: use ONLY the JSON data above. Never invent or change these numbers.
+- For TECHNICAL SPECIFICATIONS (voltage, current, power, package/pinout, type, applications, etc.): if a datasheet document is attached to this message, READ IT and quote the exact values. The attached datasheets belong to the products listed in the JSON above.
 - If the user asks "Do you have X?", list the items with their Shop and Price.
 - If the user asks "How much?", list the price for each shop.
+- If the user asks for specs/ratings: answer from the attached datasheet. Only if no datasheet is attached should you say you don't have the datasheet on file.
 - If the user says "I need from [Shop Name]", provide the "link" from the JSON for that shop.
-- Do NOT invent data. Do NOT change prices.
+- Do NOT invent prices or stock. Do NOT change prices.
 - Example Output for Link: "Ok, here is the direct link to [Item] from [Shop]: [Link](url)"
 
 USER MEMORY CONTEXT:
@@ -706,12 +741,13 @@ ${memoryContext}
                         Your goal is to help the user find and buy components using the provided inventory data.
                         
                         CRITICAL RULES:
-                        1. USE THE PROVIDED JSON DATA EXACTLY.
+                        1. USE THE PROVIDED JSON DATA EXACTLY for price, stock, shop and links.
                         2. DO NOT USE PLACEHOLDERS like "[Insert price]" or "[Insert description]".
                         3. If the data is in the JSON, output it directly.
-                        4. If the data is missing, say "I don't have that information".
-                        5. When listing items, include the Shop Name and Price.
-                        6. When providing a link, use markdown format: [Link Text](URL).
+                        4. For TECHNICAL SPECIFICATIONS, read any attached datasheet document and quote the real values. Only say "I don't have the datasheet for that on file" if no datasheet is attached.
+                        5. Never invent prices or stock levels.
+                        6. When listing items, include the Shop Name and Price.
+                        7. When providing a link, use markdown format: [Link Text](URL).
                         
                         EXAMPLE INTERACTION:
                         User: "Do you have 15T14?"
