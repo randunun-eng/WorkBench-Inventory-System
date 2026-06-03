@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { HashRouter, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import Header from './components/Header';
 import StoreFront from './pages/StoreFront';
 import ProductDetail from './pages/ProductDetail';
@@ -12,7 +12,7 @@ const App: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <HashRouter>
+    <BrowserRouter>
       <div className="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-900">
         <Routes>
           {/* Public Storefront Routes */}
@@ -62,7 +62,7 @@ const App: React.FC = () => {
           <Route path="/dashboard/*" element={<Dashboard />} />
         </Routes>
       </div>
-    </HashRouter>
+    </BrowserRouter>
   );
 };
 

@@ -678,7 +678,7 @@ ai.post('/chat', async (c) => {
                             price: `${r.currency || 'LKR'} ${r.price}`,
                             stock: r.stock_qty,
                             shop: r.shop_name,
-                            link: `/#/product/${r.id}`
+                            link: `/product/${r.id}`
                         }));
 
                         const contextContent = `OFFICIAL INVENTORY DATA (JSON):
@@ -715,8 +715,8 @@ ${memoryContext}
                         
                         EXAMPLE INTERACTION:
                         User: "Do you have 15T14?"
-                        Data: [{ name: "15T14", price: "LKR 350", shop: "ElectroFix", link: "/#/product/123" }]
-                        You: "Yes, we have 15T14 available at ElectroFix for LKR 350. You can view it here: [View 15T14](/#/product/123)"
+                        Data: [{ name: "15T14", price: "LKR 350", shop: "ElectroFix", link: "/product/123" }]
+                        You: "Yes, we have 15T14 available at ElectroFix for LKR 350. You can view it here: [View 15T14](/product/123)"
                         `;
 
                         // Collect File URIs, refreshing any stale ones first.
