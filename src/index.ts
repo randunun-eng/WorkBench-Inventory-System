@@ -30,6 +30,23 @@ const app = new Hono<{ Bindings: Bindings }>()
 
 app.use('*', cors())
 
+// Canonical host: 301 the apex (workbench.cam) and the *.workers.dev origin to
+// www.workbench.cam so search engines consolidate ranking on one host and we
+// avoid duplicate content. Only GET/HEAD are redirected; localhost dev and the
+// canonical host pass through untouched.
+app.use('*', async (c, next) => {
+    const url = new URL(c.req.url)
+    const host = url.hostname
+    const wrongHost = host === 'workbench.cam' || host.endsWith('.workers.dev')
+    if (wrongHost && (c.req.method === 'GET' || c.req.method === 'HEAD')) {
+        url.protocol = 'https:'
+        url.hostname = 'www.workbench.cam'
+        url.port = ''
+        return c.redirect(url.toString(), 301)
+    }
+    await next()
+})
+
 // Mount SEO handler at root to intercept product pages
 app.route('/', seo)
 
