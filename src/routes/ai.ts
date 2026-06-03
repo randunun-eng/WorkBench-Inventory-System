@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { authMiddleware } from '../auth'
+import { requirePro } from '../subscription'
 
 const ai = new Hono<{ Bindings: any, Variables: { user: any } }>()
 
@@ -276,7 +277,7 @@ async function callAI(
     return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }
 
-ai.post('/generate-specs', async (c) => {
+ai.post('/generate-specs', authMiddleware, requirePro, async (c) => {
     try {
         const { productName } = await c.req.json()
 
@@ -311,9 +312,9 @@ ai.post('/generate-specs', async (c) => {
         console.error('Spec generation error:', e)
         return c.json({ error: 'Failed to generate specifications', details: e.message }, 500)
     }
-}, authMiddleware)
+})
 
-ai.post('/analyze-datasheet', async (c) => {
+ai.post('/analyze-datasheet', authMiddleware, requirePro, async (c) => {
     const logs: string[] = [];
     const log = (msg: string) => {
         console.log(msg);
@@ -464,7 +465,7 @@ ai.post('/analyze-datasheet', async (c) => {
             details: `Error: ${e.message} | Logs: ${logs.join(' -> ')}`
         }, 500)
     }
-}, authMiddleware)
+})
 
 ai.post('/ocr', async (c) => {
     return c.json({ error: 'OCR requires authentication' }, 401)
