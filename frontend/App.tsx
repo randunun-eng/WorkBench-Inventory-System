@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { HashRouter, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import Header from './components/Header';
 import StoreFront from './pages/StoreFront';
 import ProductDetail from './pages/ProductDetail';
@@ -7,12 +7,16 @@ import JoinRequest from './pages/JoinRequest';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import PasswordResetRequest from './pages/PasswordResetRequest';
+import CartPage from './pages/CartPage';
+import Checkout from './pages/Checkout';
+import OrderConfirmation from './pages/OrderConfirmation';
+import TrackOrder from './pages/TrackOrder';
 
 const App: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <HashRouter>
+    <BrowserRouter>
       <div className="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-900">
         <Routes>
           {/* Public Storefront Routes */}
@@ -32,6 +36,46 @@ const App: React.FC = () => {
               <>
                 <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
                 <ProductDetail />
+                <Footer />
+              </>
+            }
+          />
+          <Route
+            path="/cart"
+            element={
+              <>
+                <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+                <CartPage />
+                <Footer />
+              </>
+            }
+          />
+          <Route
+            path="/checkout"
+            element={
+              <>
+                <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+                <Checkout />
+                <Footer />
+              </>
+            }
+          />
+          <Route
+            path="/order/:id"
+            element={
+              <>
+                <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+                <OrderConfirmation />
+                <Footer />
+              </>
+            }
+          />
+          <Route
+            path="/track"
+            element={
+              <>
+                <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+                <TrackOrder />
                 <Footer />
               </>
             }
@@ -62,7 +106,7 @@ const App: React.FC = () => {
           <Route path="/dashboard/*" element={<Dashboard />} />
         </Routes>
       </div>
-    </HashRouter>
+    </BrowserRouter>
   );
 };
 
@@ -76,8 +120,8 @@ const Footer: React.FC = () => (
       <div>
         <h4 className="font-bold text-gray-900 mb-4">For Buyers</h4>
         <Link to="/" className="block mb-2 hover:text-brand-blue">Find Parts Nearby</Link>
-        <p className="mb-2">Verify Stock</p>
-        <p>Contact Sellers</p>
+        <Link to="/track" className="block mb-2 hover:text-brand-blue">Track Order</Link>
+        <Link to="/cart" className="block hover:text-brand-blue">View Cart</Link>
       </div>
       <div>
         <h4 className="font-bold text-gray-900 mb-4">For Sellers</h4>

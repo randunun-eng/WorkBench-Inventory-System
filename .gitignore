@@ -1,7 +1,20 @@
 node_modules/
 .wrangler/
 .env
+.env.local
 .env.production
+.env.*.local
+# Cloudflare Workers local dev secrets — never commit
+.dev.vars
+.dev.vars.local
 dist/
 *.log
 .DS_Store
+
+# Local-only backup snapshots; never commit
+*.backup.*
+*_backup_*
+*.backup_*
+
+# Embedded experiments (kept locally, not deployed)
+temp_*/

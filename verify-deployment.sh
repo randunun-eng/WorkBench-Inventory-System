@@ -8,7 +8,7 @@ echo "WorkBench Inventory Deployment Verification"
 echo "=========================================="
 echo ""
 
-BASE_URL="https://workbench-inventory.randunun.workers.dev"
+BASE_URL="https://workbench-inventory.randunu-4oc.workers.dev"
 
 # Test 1: API Status
 echo "🔍 Test 1: API Status Check"

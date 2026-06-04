@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import {
   Plus, Edit, Trash2, Image, FileText, Package, DollarSign,
   Eye, EyeOff, Upload, X, Save, Search, Filter, History, TrendingUp,
-  MessageSquare, Layers, Bot, Store, LogOut, Shield, Settings, Sparkles
+  MessageSquare, Layers, Bot, Store, LogOut, Shield, Settings, Sparkles, Wallet, ShoppingBag
 } from 'lucide-react';
 import InventoryList from '../src/pages/dashboard/InventoryList';
+import PaymentSettings from '../components/PaymentSettings';
+import OrdersManagement from '../components/OrdersManagement';
 import CategoryList from '../src/pages/dashboard/CategoryList';
 import Chat from '../src/pages/dashboard/Chat';
 import Network from '../src/pages/dashboard/Network';
@@ -66,7 +68,6 @@ const Dashboard: React.FC = () => {
     currency: 'LKR',
     is_public: false,
     is_visible_to_network: false,
-    is_visible_to_network: false,
     shareable_qty: '0',
     gemini_file_uri: ''
   });
@@ -88,7 +89,7 @@ const Dashboard: React.FC = () => {
   const [selectedItemForHistory, setSelectedItemForHistory] = useState<InventoryItem | null>(null);
 
   // View State
-  const [activeView, setActiveView] = useState<'inventory' | 'categories' | 'chat' | 'chatbot' | 'network' | 'vision' | 'admin' | 'settings'>('inventory');
+  const [activeView, setActiveView] = useState<'inventory' | 'categories' | 'chat' | 'chatbot' | 'network' | 'vision' | 'admin' | 'settings' | 'payments' | 'orders'>('inventory');
   const [activeChatRoomId, setActiveChatRoomId] = useState<string | null>(null);
 
   // Category Management State
@@ -615,7 +616,6 @@ const Dashboard: React.FC = () => {
       currency: item.currency || 'LKR',
       is_public: Boolean(item.is_public),
       is_visible_to_network: Boolean(item.is_visible_to_network),
-      is_visible_to_network: Boolean(item.is_visible_to_network),
       shareable_qty: item.shareable_qty?.toString() || '0',
       gemini_file_uri: item.gemini_file_uri || ''
     });
@@ -633,7 +633,6 @@ const Dashboard: React.FC = () => {
       price: '',
       currency: 'LKR',
       is_public: false,
-      is_visible_to_network: false,
       is_visible_to_network: false,
       shareable_qty: '0',
       gemini_file_uri: ''
@@ -712,6 +711,20 @@ const Dashboard: React.FC = () => {
           )}
 
           <button
+            onClick={() => setActiveView('orders')}
+            className={`w-full text-left px-4 py-2 rounded-md flex items-center gap-3 ${activeView === 'orders' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            <ShoppingBag size={20} /> Orders
+          </button>
+
+          <button
+            onClick={() => setActiveView('payments')}
+            className={`w-full text-left px-4 py-2 rounded-md flex items-center gap-3 ${activeView === 'payments' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            <Wallet size={20} /> Payments
+          </button>
+
+          <button
             onClick={() => setActiveView('settings')}
             className={`w-full text-left px-4 py-2 rounded-md flex items-center gap-3 ${activeView === 'settings' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
           >
@@ -782,6 +795,8 @@ const Dashboard: React.FC = () => {
 
                   {activeView === 'admin' && 'User Management'}
                   {activeView === 'settings' && 'Shop Settings'}
+                  {activeView === 'payments' && 'Payment Settings'}
+                  {activeView === 'orders' && 'Orders'}
                 </h1>
                 <p className="text-sm text-gray-600">{user.shop_name || user.email}</p>
               </div>
@@ -1003,6 +1018,10 @@ const Dashboard: React.FC = () => {
             <AdminDashboard />
           ) : activeView === 'settings' ? (
             <ShopSettings />
+          ) : activeView === 'payments' ? (
+            <PaymentSettings />
+          ) : activeView === 'orders' ? (
+            <OrdersManagement />
           ) : (
             <div className="text-center py-20">
               <p className="text-gray-600">Feature coming soon...</p>

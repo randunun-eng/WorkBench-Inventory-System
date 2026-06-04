@@ -107,33 +107,33 @@ Successfully added mock data to the production database:
 ### Test Search Functionality
 ```bash
 # Search for Schneider products
-curl "https://workbench-inventory.randunun.workers.dev/api/search?q=schneider"
+curl "https://www.workbench.cam/api/search?q=schneider"
 
 # Search for solar products
-curl "https://workbench-inventory.randunun.workers.dev/api/search?q=solar"
+curl "https://www.workbench.cam/api/search?q=solar"
 
 # Search for ESP32
-curl "https://workbench-inventory.randunun.workers.dev/api/search?q=esp32"
+curl "https://www.workbench.cam/api/search?q=esp32"
 ```
 
 ### View Shop Products
 ```bash
 # ElectroFix Components
-curl "https://workbench-inventory.randunun.workers.dev/api/shop/electrofix-components"
+curl "https://www.workbench.cam/api/shop/electrofix-components"
 
 # SolarTech Solutions
-curl "https://workbench-inventory.randunun.workers.dev/api/shop/solartech-solutions"
+curl "https://www.workbench.cam/api/shop/solartech-solutions"
 
 # AutoVolts EV Parts
-curl "https://workbench-inventory.randunun.workers.dev/api/shop/autovolts-ev-parts"
+curl "https://www.workbench.cam/api/shop/autovolts-ev-parts"
 
 # TechSource Pro
-curl "https://workbench-inventory.randunun.workers.dev/api/shop/techsource-pro"
+curl "https://www.workbench.cam/api/shop/techsource-pro"
 ```
 
 ### Login to Any Shop
 ```bash
-curl -X POST "https://workbench-inventory.randunun.workers.dev/auth/login" \
+curl -X POST "https://www.workbench.cam/auth/login" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "electrofix@example.com",
@@ -145,7 +145,7 @@ curl -X POST "https://workbench-inventory.randunun.workers.dev/auth/login" \
 
 ## 🌐 View on Frontend
 
-Visit: **https://workbench-inventory.randunun.workers.dev**
+Visit: **https://www.workbench.cam**
 
 You should now see:
 - ✅ 14 products on the homepage
@@ -201,7 +201,7 @@ GROUP BY u.shop_name;
 
 ## 🚀 Next Steps
 
-1. **Browse the frontend** at https://workbench-inventory.randunun.workers.dev
+1. **Browse the frontend** at https://www.workbench.cam
 2. **Test search** with various keywords
 3. **View product details** by clicking on products
 4. **Login to a shop** to manage inventory
@@ -240,4 +240,4 @@ wrangler d1 execute workbench-db --remote --command \
 
 **Your WorkBench Inventory System now has realistic mock data and is ready for testing!** 🎉
 
-Visit: https://workbench-inventory.randunun.workers.dev
+Visit: https://www.workbench.cam

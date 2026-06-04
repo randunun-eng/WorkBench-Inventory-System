@@ -78,11 +78,11 @@ wrangler d1 execute workbench-db --remote --command \
 # Result: 9
 
 # Search for products
-curl "https://workbench-inventory.randunun.workers.dev/api/search?q=schneider"
+curl "https://www.workbench.cam/api/search?q=schneider"
 # Result: Found products
 
 # View shop
-curl "https://workbench-inventory.randunun.workers.dev/api/shop/electrofix-components"
+curl "https://www.workbench.cam/api/shop/electrofix-components"
 # Result: Shop with 3 products
 ```
 
@@ -128,7 +128,7 @@ All 9 products from the GitHub repository have been added:
 
 ## 🌐 Live Application
 
-**URL**: https://workbench-inventory.randunun.workers.dev
+**URL**: https://www.workbench.cam
 
 ### What You'll See
 - Homepage with all 9 products
@@ -195,7 +195,7 @@ cd /home/dell/Documents/github/workbench\ inventory
 
 Your system is now perfectly synced with the GitHub repository design!
 
-1. **Test the live site**: https://workbench-inventory.randunun.workers.dev
+1. **Test the live site**: https://www.workbench.cam
 2. **Browse all 9 products** from 6 different shops
 3. **Try the search** for "schneider", "esp32", "solar", etc.
 4. **View individual shops** by clicking on them

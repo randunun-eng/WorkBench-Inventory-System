@@ -8,12 +8,12 @@
 ## 🌐 Live URLs
 
 ### Production Application
-**Main URL**: https://workbench-inventory.randunun.workers.dev
+**Main URL**: https://www.workbench.cam
 
 ### Quick Links
-- 🏠 **Homepage**: https://workbench-inventory.randunun.workers.dev/
-- 📝 **Join/Register**: https://workbench-inventory.randunun.workers.dev/join
-- 🔌 **API Status**: https://workbench-inventory.randunun.workers.dev/api
+- 🏠 **Homepage**: https://www.workbench.cam/
+- 📝 **Join/Register**: https://www.workbench.cam/join
+- 🔌 **API Status**: https://www.workbench.cam/api
 
 ---
 
@@ -64,53 +64,53 @@ All deployment tests passed successfully:
 
 ```bash
 # API Status
-GET https://workbench-inventory.randunun.workers.dev/api
+GET https://www.workbench.cam/api
 
 # Search Products
-GET https://workbench-inventory.randunun.workers.dev/api/search?q=<query>
+GET https://www.workbench.cam/api/search?q=<query>
 
 # Get Shop Details
-GET https://workbench-inventory.randunun.workers.dev/api/shop/<slug>
+GET https://www.workbench.cam/api/shop/<slug>
 
 # User Signup
-POST https://workbench-inventory.randunun.workers.dev/auth/signup
+POST https://www.workbench.cam/auth/signup
 
 # User Login
-POST https://workbench-inventory.randunun.workers.dev/auth/login
+POST https://www.workbench.cam/auth/login
 ```
 
 ### Protected Endpoints (Authentication Required)
 
 ```bash
 # List Inventory
-GET https://workbench-inventory.randunun.workers.dev/api/inventory
+GET https://www.workbench.cam/api/inventory
 
 # Create Item
-POST https://workbench-inventory.randunun.workers.dev/api/inventory
+POST https://www.workbench.cam/api/inventory
 
 # Get Item
-GET https://workbench-inventory.randunun.workers.dev/api/inventory/:id
+GET https://www.workbench.cam/api/inventory/:id
 
 # Update Item
-PUT https://workbench-inventory.randunun.workers.dev/api/inventory/:id
+PUT https://www.workbench.cam/api/inventory/:id
 
 # Delete Item
-DELETE https://workbench-inventory.randunun.workers.dev/api/inventory/:id
+DELETE https://www.workbench.cam/api/inventory/:id
 
 # Upload Image
-POST https://workbench-inventory.randunun.workers.dev/api/upload
+POST https://www.workbench.cam/api/upload
 
 # Chat Features
-POST https://workbench-inventory.randunun.workers.dev/api/chat
+POST https://www.workbench.cam/api/chat
 
 # Network Features
-GET https://workbench-inventory.randunun.workers.dev/api/network
+GET https://www.workbench.cam/api/network
 
 # AI Features
-POST https://workbench-inventory.randunun.workers.dev/api/ai
+POST https://www.workbench.cam/api/ai
 
 # Vision Features
-POST https://workbench-inventory.randunun.workers.dev/api/vision
+POST https://www.workbench.cam/api/vision
 ```
 
 ---
@@ -126,7 +126,7 @@ POST https://workbench-inventory.randunun.workers.dev/api/vision
 
 #### 1. Test API
 ```bash
-curl https://workbench-inventory.randunun.workers.dev/api
+curl https://www.workbench.cam/api
 ```
 
 Expected response:
@@ -139,7 +139,7 @@ Expected response:
 
 #### 2. Create a Test User
 ```bash
-curl -X POST https://workbench-inventory.randunun.workers.dev/auth/signup \
+curl -X POST https://www.workbench.cam/auth/signup \
   -H "Content-Type: application/json" \
   -d '{
     "email": "test@example.com",
@@ -150,7 +150,7 @@ curl -X POST https://workbench-inventory.randunun.workers.dev/auth/signup \
 
 #### 3. Login and Get Token
 ```bash
-curl -X POST https://workbench-inventory.randunun.workers.dev/auth/login \
+curl -X POST https://www.workbench.cam/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "test@example.com",
@@ -257,7 +257,7 @@ The application is fully responsive and works on:
 
 Your WorkBench Inventory System is **LIVE** and **FULLY OPERATIONAL**!
 
-**🌐 Visit**: https://workbench-inventory.randunun.workers.dev
+**🌐 Visit**: https://www.workbench.cam
 
 All systems are running correctly. You can now start using your application!
 

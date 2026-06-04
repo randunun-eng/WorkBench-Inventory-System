@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { verifyToken } from '../auth'
+import { verifyToken, getJwtSecret } from '../auth'
 
 const chat = new Hono<{ Bindings: any }>()
 
@@ -26,7 +26,13 @@ chat.get('/room/:roomId', async (c) => {
 
     if (token) {
         // Authenticated User (Shop Owner)
-        const user = await verifyToken(token)
+        let secret: string
+        try {
+            secret = getJwtSecret(c.env)
+        } catch (e: any) {
+            return c.text(`Server misconfigured: ${e.message}`, 500)
+        }
+        const user = await verifyToken(token, secret)
         if (!user) {
             return c.text('Invalid token', 401)
         }
@@ -67,7 +73,13 @@ chat.get('/presence', async (c) => {
         return c.text('Missing token', 401)
     }
 
-    const user = await verifyToken(token)
+    let secret: string
+    try {
+        secret = getJwtSecret(c.env)
+    } catch (e: any) {
+        return c.text(`Server misconfigured: ${e.message}`, 500)
+    }
+    const user = await verifyToken(token, secret)
     if (!user) {
         return c.text('Invalid token', 401)
     }

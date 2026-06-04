@@ -3,6 +3,11 @@ main = "src/index.ts"
 compatibility_date = "2024-11-12"
 compatibility_flags = ["nodejs_compat"]
 
+# Explicitly enable the *.workers.dev preview URL. Without this, the route can
+# end up disabled (the URL returns NXDOMAIN even though deploys succeed). Set
+# to false only if serving exclusively via a custom domain.
+workers_dev = true
+
 # Serve frontend assets
 [assets]
 directory = "./frontend/dist"
@@ -40,6 +45,16 @@ new_sqlite_classes = ["ChatRoom", "PresenceRegistry"]
 # Environment Variables
 [vars]
 ADMIN_EMAIL = "randunun@gmail.com"
+# LANKAQR manual payments: set LANKAQR_QR_URL to your bank's static merchant
+# QR image URL to enable the upgrade flow. Not secret, so it lives here.
+LANKAQR_MERCHANT_NAME = "WorkBench"
+LANKAQR_QR_URL = ""
+
+# Secrets — DO NOT put values here. Configure via:
+#   wrangler secret put JWT_SECRET       (required, min 16 chars)
+#   wrangler secret put GEMINI_API_KEY   (required for AI chat / datasheet analysis)
+#   wrangler secret put RESEND_API_KEY   (optional, for signup admin notifications)
+# For local dev, put them in a .dev.vars file (gitignored).
 
 
 [observability]

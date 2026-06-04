@@ -28,7 +28,7 @@ export const useChatRoom = (roomId: string | null) => {
             const token = api.token;
             if (!token) return;
 
-            const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://workbench-inventory.randunun.workers.dev';
+            const baseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin;
             const wsUrl = new URL(`${baseUrl}/api/chat/room/${roomId}`);
             wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:';
             wsUrl.searchParams.set('token', token);

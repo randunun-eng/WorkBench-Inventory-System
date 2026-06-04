@@ -1,7 +1,30 @@
 import { Hono } from 'hono'
 import { authMiddleware } from '../auth'
+import { requirePro } from '../subscription'
 
 const ai = new Hono<{ Bindings: any, Variables: { user: any } }>()
+
+/**
+ * Heuristic gate for memory extraction. Returns true only for messages that
+ * plausibly contain a durable preference or fact about the user — long-form
+ * statements with first-person pronouns and a stance verb. Everything else
+ * (quick searches, single-word lookups, follow-ups like "price?") is filtered
+ * out before we spend an AI call on extraction.
+ */
+function shouldExtractMemory(message: string): boolean {
+    if (typeof message !== 'string') return false
+    const trimmed = message.trim()
+    if (trimmed.length < 30) return false
+    // First-person + stance/action verb → likely a preference or context.
+    if (/\b(I|my|me|we|our)\b.*\b(prefer|like|love|hate|need|use|build|run|own|manage|work|focus|specialise|specialize|always|usually)\b/i.test(trimmed)) {
+        return true
+    }
+    // "I'm building/working/using X for Y" patterns.
+    if (/\bI'?m\s+(working|building|making|using|trying|designing)\b/i.test(trimmed)) {
+        return true
+    }
+    return false
+}
 
 // Helper function to fetch and analyze datasheet
 // Helper to upload file to Gemini File API
@@ -109,19 +132,62 @@ async function analyzeDatasheet(datasheetKey: string, publicBucket: any, apiKey:
     }
 }
 
+/**
+ * Re-upload an R2-stored datasheet to Gemini's File API and persist the new
+ * URI + upload timestamp in catalog_items. Gemini files expire after ~48h,
+ * so URIs stored in the DB need refreshing periodically.
+ *
+ * Returns the fresh { uri, mimeType } on success, or null on any failure
+ * (caller should skip that item rather than abort the whole chat).
+ */
+async function refreshGeminiFile(
+    catalogItemId: string,
+    datasheetKey: string,
+    publicBucket: any,
+    db: any,
+    apiKey: string
+): Promise<{ uri: string; mimeType: string } | null> {
+    try {
+        const object = await publicBucket.get(datasheetKey)
+        if (!object) {
+            console.warn(`R2 object missing for ${datasheetKey}; skipping`)
+            return null
+        }
+        const mimeType = object.httpMetadata?.contentType || 'application/pdf'
+        const fileData = await object.arrayBuffer()
+        const uri = await uploadToGemini(fileData, mimeType, apiKey)
+
+        // Persist the fresh URI + mime + timestamp so the next chat reuses it
+        // until the next 24h window closes.
+        await db.prepare(`
+            UPDATE catalog_items
+            SET gemini_file_uri = ?, gemini_mime_type = ?, gemini_uploaded_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        `).bind(uri, mimeType, catalogItemId).run()
+
+        return { uri, mimeType }
+    } catch (e) {
+        console.error(`refreshGeminiFile failed for ${catalogItemId}:`, e)
+        return null
+    }
+}
+
+/** Per-file reference passed to Gemini (uri + its actual mime type). */
+type GeminiFileRef = { uri: string; mimeType: string }
+
 // Helper to call AI (Prioritizes Cloudflare Llama 3 to save tokens, falls back to Gemini)
 async function callAI(
     messages: any[],
     systemPrompt: string,
     apiKey: string,
     jsonMode: boolean = false,
-    fileUris: string[] = [],
+    fileRefs: GeminiFileRef[] = [],
     aiBinding: any = null
 ): Promise<string> {
 
     // 1. Try Cloudflare Llama 3 FIRST (if available and no files)
     // This saves Gemini tokens for text-only chats (RAG)
-    if (aiBinding && fileUris.length === 0) {
+    if (aiBinding && fileRefs.length === 0) {
         try {
             console.log('Attempting Cloudflare AI (Llama 3) to save tokens...');
             const llamaMessages = [
@@ -146,7 +212,10 @@ async function callAI(
     // Primary: Gemini 2.5 Flash
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
-    // Convert OpenAI-style messages to Gemini format
+    // Convert OpenAI-style messages to Gemini format. The type predicate on
+    // .filter narrows the result so downstream code can index into it without
+    // a `possibly null` complaint from TypeScript.
+    type GeminiContent = { role: string; parts: any[] }
     const contents = messages.map(msg => {
         let role = 'user';
         if (msg.role === 'assistant') role = 'model';
@@ -155,14 +224,16 @@ async function callAI(
             role: role,
             parts: [{ text: msg.content }]
         };
-    }).filter(Boolean);
+    }).filter((c): c is GeminiContent => c !== null);
 
-    // Attach files to the last user message or create a new one
-    if (fileUris.length > 0) {
-        const fileParts = fileUris.map(uri => ({
+    // Attach files to the last user message or create a new one. Each file
+    // carries its own mime type — never assume PDF, since datasheets are
+    // often uploaded as images (PNG/JPG).
+    if (fileRefs.length > 0) {
+        const fileParts = fileRefs.map(ref => ({
             file_data: {
-                mime_type: 'application/pdf', // Assuming PDF for now, can be dynamic if needed
-                file_uri: uri
+                mime_type: ref.mimeType,
+                file_uri: ref.uri
             }
         }));
 
@@ -206,7 +277,7 @@ async function callAI(
     return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }
 
-ai.post('/generate-specs', async (c) => {
+ai.post('/generate-specs', authMiddleware, requirePro, async (c) => {
     try {
         const { productName } = await c.req.json()
 
@@ -241,9 +312,9 @@ ai.post('/generate-specs', async (c) => {
         console.error('Spec generation error:', e)
         return c.json({ error: 'Failed to generate specifications', details: e.message }, 500)
     }
-}, authMiddleware)
+})
 
-ai.post('/analyze-datasheet', async (c) => {
+ai.post('/analyze-datasheet', authMiddleware, requirePro, async (c) => {
     const logs: string[] = [];
     const log = (msg: string) => {
         console.log(msg);
@@ -394,7 +465,7 @@ ai.post('/analyze-datasheet', async (c) => {
             details: `Error: ${e.message} | Logs: ${logs.join(' -> ')}`
         }, 500)
     }
-}, authMiddleware)
+})
 
 ai.post('/ocr', async (c) => {
     return c.json({ error: 'OCR requires authentication' }, 401)
@@ -443,10 +514,20 @@ ai.post('/chat', async (c) => {
            - "Price?" -> Search for the last discussed item.
            - "I need from Shop X" -> Search for the last discussed item.
         8. ONLY OUTPUT JSON.
-        9. IF THE USER EXPRESSES A NEED OR WANT, IT IS A SEARCH.
+        9. IF THE USER EXPRESSES A NEED OR WANT FOR A PART, IT IS A SEARCH.
+        10. For greetings, thanks, small talk, or general / how-it-works questions that are NOT about a specific part, output: { "type": "CHAT" }
+        11. If the user asks for an ALTERNATIVE, SUBSTITUTE, EQUIVALENT, REPLACEMENT, or "what can I use instead of X", output: { "type": "ALTERNATIVE", "query": "X", "category": "<component type>" }
+        12. Whenever you can infer the component TYPE (transistor, mosfet, igbt, diode, capacitor, resistor, voltage regulator, inverter, etc.), include a "category" field — it powers alternative matching.
 
         Examples:
-        User: "Do you have transistors?" -> { "type": "SEARCH", "query": "transistor" }
+        User: "Hi" -> { "type": "CHAT" }
+        User: "How does this work?" -> { "type": "CHAT" }
+        User: "Thanks!" -> { "type": "CHAT" }
+        User: "Can you help me find something?" -> { "type": "CHAT" }
+        User: "Do you have transistors?" -> { "type": "SEARCH", "query": "transistor", "category": "transistor" }
+        User: "What can I use instead of 2N3904?" -> { "type": "ALTERNATIVE", "query": "2N3904", "category": "transistor" }
+        User: "Any equivalent for IRFZ44N?" -> { "type": "ALTERNATIVE", "query": "IRFZ44N", "category": "mosfet" }
+        User: "substitute for a 7805 regulator?" -> { "type": "ALTERNATIVE", "query": "7805", "category": "voltage regulator" }
         User: "Do you have ncep products?" -> { "type": "SEARCH", "query": "ncep" }
         User: "Check for 150v mosfets" -> { "type": "SEARCH", "query": "150v mosfet" }
         User: "need 150v mosfet" -> { "type": "SEARCH", "query": "150v mosfet" }
@@ -463,6 +544,11 @@ ai.post('/chat', async (c) => {
         let searchResults: any[] = []
         let performedSearch = false
 
+        // Friendly persona for anything that isn't a product lookup (greetings,
+        // "how does this work", thanks, general advice). Keeps the bot natural
+        // instead of dead-ending on a canned line.
+        const conversationalSystemPrompt = `You are WorkBench AI — a warm, helpful assistant for an electronics-parts marketplace in Sri Lanka. You help people find components (transistors, MOSFETs, IGBTs, capacitors, solar inverter parts, etc.), answer questions, and guide them. Be friendly, natural and concise, like a knowledgeable shop assistant. Use the conversation history for context. If the user seems to be looking for a part, invite them to name the part or type so you can search our shops. You can explain how WorkBench works: browse parts from many Sri Lankan shops, add them to a cart, and pay each shop directly via their LANKAQR. Never invent specific stock levels, prices or part numbers — if they want specifics, offer to look it up.`
+
         // 2. Check if AI wants to search
         try {
             console.log('Raw AI Response (Intent):', content);
@@ -473,18 +559,36 @@ ai.post('/chat', async (c) => {
                 const command = JSON.parse(jsonMatch[0]);
                 console.log('Parsed Command:', command);
 
-                if (command.type === 'SEARCH' || command.type === 'COMPARE' || command.type === 'SELECT') {
+                if (command.type === 'SEARCH' || command.type === 'COMPARE' || command.type === 'SELECT' || command.type === 'ALTERNATIVE') {
                     performedSearch = true;
+                    const isAlt = command.type === 'ALTERNATIVE';
+                    const category = (command.category || '').toString().replace(/"/g, '').trim();
 
                     let cleanQuery = '';
-                    if (command.type === 'SEARCH') cleanQuery = command.query.replace(/"/g, '');
-                    if (command.type === 'COMPARE') cleanQuery = command.items.join(' OR '); // Simple OR search for now
+                    if (command.type === 'SEARCH' || isAlt) cleanQuery = (command.query || '').replace(/"/g, '');
+                    if (command.type === 'COMPARE') cleanQuery = command.items.join(' '); // tokens are OR'd downstream
                     if (command.type === 'SELECT') cleanQuery = command.criteria; // Search by criteria
 
-                    console.log('Executing FTS Search:', cleanQuery);
+                    console.log('Executing Search:', cleanQuery);
 
-                    // 1. Execute FTS Search (Public Items from Shared Catalog)
-                    const ftsResults = await c.env.DB.prepare(`
+                    // Tokenize so multi-word queries (e.g. "2SC3866 transistor") don't
+                    // require EVERY term to match: OR the tokens in FTS, plus a per-token
+                    // LIKE pass below, so an exact part-number token still matches even
+                    // when the user appends a type word.
+                    const STOPWORDS = new Set(['or','and','the','a','an','for','with','of','to','in','is','are','do','you','have'])
+                    const queryTokens = cleanQuery
+                        .split(/\s+/)
+                        .map((t: string) => t.trim())
+                        .filter((t: string) => t.length >= 2 && !STOPWORDS.has(t.toLowerCase()))
+                    const effectiveTokens = queryTokens.length > 0 ? queryTokens : [cleanQuery]
+                    const ftsQuery = effectiveTokens.map((t: string) => `"${t.replace(/"/g, '')}"`).join(' OR ')
+                    const likeClauses = effectiveTokens.map(() => '(c.name LIKE ? OR c.description LIKE ?)').join(' OR ')
+                    const likeBinds = effectiveTokens.flatMap((t: string) => [`%${t}%`, `%${t}%`])
+
+                    // 1. Execute FTS Search (Public Items from Shared Catalog), OR'd tokens
+                    let ftsResults: any = { results: [] }
+                    try {
+                    ftsResults = await c.env.DB.prepare(`
                         SELECT
                             c.id,
                             c.name,
@@ -492,6 +596,8 @@ ai.post('/chat', async (c) => {
                             c.specifications,
                             c.datasheet_r2_key,
                             c.gemini_file_uri,
+                            c.gemini_uploaded_at,
+                            c.gemini_mime_type,
                             si.stock_qty,
                             si.price,
                             si.currency,
@@ -501,8 +607,9 @@ ai.post('/chat', async (c) => {
                         LEFT JOIN shop_inventory si ON c.id = si.catalog_item_id AND si.is_visible_to_network = 1
                         LEFT JOIN users u ON si.shop_id = u.id
                         WHERE catalog_fts MATCH ? AND c.is_public = 1
-                        LIMIT 5
-                    `).bind(cleanQuery).all();
+                        LIMIT 8
+                    `).bind(ftsQuery).all();
+                    } catch (e) { console.error('FTS query failed (continuing with LIKE passes):', e) }
 
                     // 2. Execute Category Search (Find items in matching categories)
                     const categoryResults = await c.env.DB.prepare(`
@@ -513,6 +620,8 @@ ai.post('/chat', async (c) => {
                             c.specifications,
                             c.datasheet_r2_key,
                             c.gemini_file_uri,
+                            c.gemini_uploaded_at,
+                            c.gemini_mime_type,
                             si.stock_qty,
                             si.price,
                             si.currency,
@@ -535,6 +644,8 @@ ai.post('/chat', async (c) => {
                             c.specifications,
                             c.datasheet_r2_key,
                             c.gemini_file_uri,
+                            c.gemini_uploaded_at,
+                            c.gemini_mime_type,
                             si.stock_qty,
                             si.price,
                             si.currency,
@@ -546,11 +657,28 @@ ai.post('/chat', async (c) => {
                         LIMIT 5
                     `).bind(`%${cleanQuery}%`, `%${cleanQuery}%`).all();
 
-                    // 4. Merge and Deduplicate Results
+                    // 3b. Per-token LIKE search — catches an exact part number (e.g. a
+                    // bare "2SC3866") even when the user added a type word that the
+                    // strict full-phrase pass would miss.
+                    const tokenResults = await c.env.DB.prepare(`
+                        SELECT
+                            c.id, c.name, c.description, c.specifications, c.datasheet_r2_key,
+                            c.gemini_file_uri, c.gemini_uploaded_at, c.gemini_mime_type,
+                            si.stock_qty, si.price, si.currency, u.shop_name
+                        FROM catalog_items c
+                        LEFT JOIN shop_inventory si ON c.id = si.catalog_item_id AND si.is_visible_to_network = 1
+                        LEFT JOIN users u ON si.shop_id = u.id
+                        WHERE (${likeClauses}) AND c.is_public = 1
+                        LIMIT 8
+                    `).bind(...likeBinds).all();
+
+                    // 4. Merge and Deduplicate — strongest signal first:
+                    //    exact phrase > FTS tokens > any-token LIKE > category
                     const allResults = [
+                        ...(descriptionResults.results || []),
                         ...(ftsResults.results || []),
-                        ...(categoryResults.results || []),
-                        ...(descriptionResults.results || [])
+                        ...(tokenResults.results || []),
+                        ...(categoryResults.results || [])
                     ];
                     const uniqueMap = new Map();
                     for (const item of allResults) {
@@ -560,11 +688,43 @@ ai.post('/chat', async (c) => {
                     }
                     searchResults = Array.from(uniqueMap.values()).slice(0, 5);
 
+                    // Alternatives: when the user explicitly asks for a substitute,
+                    // OR we found nothing but know the component type, pull
+                    // same-category items as candidate alternatives for the AI to
+                    // evaluate against the requested part's typical specs.
+                    let suggestAlternatives = isAlt;
+                    const requestedPart = cleanQuery;
+                    if ((isAlt || searchResults.length === 0) && (category || cleanQuery)) {
+                        const term = `%${category || cleanQuery}%`;
+                        const altRes = await c.env.DB.prepare(`
+                            SELECT
+                                c.id, c.name, c.description, c.specifications, c.datasheet_r2_key,
+                                c.gemini_file_uri, c.gemini_uploaded_at, c.gemini_mime_type,
+                                si.stock_qty, si.price, si.currency, u.shop_name
+                            FROM catalog_items c
+                            LEFT JOIN categories cat ON c.category_id = cat.id
+                            LEFT JOIN shop_inventory si ON c.id = si.catalog_item_id AND si.is_visible_to_network = 1
+                            LEFT JOIN users u ON si.shop_id = u.id
+                            WHERE c.is_public = 1 AND (cat.name LIKE ? OR c.name LIKE ? OR c.description LIKE ?)
+                            LIMIT 12
+                        `).bind(term, term, term).all();
+
+                        const altItems = (altRes.results || []).filter((it: any) =>
+                            !(requestedPart && String(it.name).toLowerCase() === requestedPart.toLowerCase())
+                        );
+                        if ((isAlt || searchResults.length === 0) && altItems.length > 0) {
+                            const m = new Map<string, any>();
+                            for (const it of [...searchResults, ...altItems]) if (!m.has(it.id)) m.set(it.id, it);
+                            searchResults = Array.from(m.values()).slice(0, 6);
+                            suggestAlternatives = true;
+                        }
+                    }
+
                     console.log('Search Results:', searchResults);
 
                     // Handle Empty Results - HARD STOP to prevent hallucinations
                     if (searchResults.length === 0) {
-                        content = `I searched our inventory for "${command.query}" but couldn't find any matching items. Please try a different search term or check the spelling.`;
+                        content = `I couldn't find anything matching "${cleanQuery}" in our shops right now. Try a different spelling or a broader term — or tell me what you're building and I'll suggest some options.`;
                     } else {
                         // 3. Format technical specifications from pre-extracted JSON
                         let technicalDetails = '';
@@ -602,22 +762,32 @@ ai.post('/chat', async (c) => {
                             price: `${r.currency || 'LKR'} ${r.price}`,
                             stock: r.stock_qty,
                             shop: r.shop_name,
-                            link: `/#/product/${r.id}`
+                            link: `/product/${r.id}`
                         }));
+
+                        const altContext = suggestAlternatives ? `
+
+ALTERNATIVES MODE:
+- The user is looking for "${requestedPart}"${category ? ` (a ${category})` : ''}, which may be out of stock or not carried by us.
+- Using your electronics knowledge of "${requestedPart}"'s typical characteristics (type/polarity, voltage/current/power ratings, package, pinout), recommend the CLOSEST substitutes from the inventory JSON above.
+- For each suggestion, briefly justify it on key electrical specs and FLAG any differences the user must verify (pinout/package, max voltage/current, gate-threshold, hFE, etc.).
+- Recommend ONLY items present in the inventory JSON. If none is a sound electrical match, say so honestly and tell them which spec to look for.
+` : '';
 
                         const contextContent = `OFFICIAL INVENTORY DATA (JSON):
 ${JSON.stringify(inventoryContext, null, 2)}
 
 Technical Specs:
 ${technicalDetails}
-
+${altContext}
 CRITICAL INSTRUCTIONS:
-- You are a strict inventory assistant.
-- Answer the user's question using ONLY the JSON data above.
+- For PRICES, STOCK, SHOP NAMES and LINKS: use ONLY the JSON data above. Never invent or change these numbers.
+- For TECHNICAL SPECIFICATIONS (voltage, current, power, package/pinout, type, applications, etc.): if a datasheet document is attached to this message, READ IT and quote the exact values. The attached datasheets belong to the products listed in the JSON above.
 - If the user asks "Do you have X?", list the items with their Shop and Price.
 - If the user asks "How much?", list the price for each shop.
+- If the user asks for specs/ratings: answer from the attached datasheet. Only if no datasheet is attached should you say you don't have the datasheet on file.
 - If the user says "I need from [Shop Name]", provide the "link" from the JSON for that shop.
-- Do NOT invent data. Do NOT change prices.
+- Do NOT invent prices or stock. Do NOT change prices.
 - Example Output for Link: "Ok, here is the direct link to [Item] from [Shop]: [Link](url)"
 
 USER MEMORY CONTEXT:
@@ -625,29 +795,62 @@ ${memoryContext}
 `;
 
                         const finalSystemPrompt = `
-                        You are WorkBench AI, a helpful inventory assistant.
-                        
-                        Your goal is to help the user find and buy components using the provided inventory data.
-                        
+                        You are WorkBench AI — an EXPERT electronics components assistant for a Sri Lankan parts marketplace. You know semiconductor and component equivalents, you read datasheets, and you match parts by their electrical specifications. You help users find parts, evaluate datasheets, and choose suitable in-stock alternatives.
+
                         CRITICAL RULES:
-                        1. USE THE PROVIDED JSON DATA EXACTLY.
+                        1. USE THE PROVIDED JSON DATA EXACTLY for price, stock, shop and links.
                         2. DO NOT USE PLACEHOLDERS like "[Insert price]" or "[Insert description]".
                         3. If the data is in the JSON, output it directly.
-                        4. If the data is missing, say "I don't have that information".
-                        5. When listing items, include the Shop Name and Price.
-                        6. When providing a link, use markdown format: [Link Text](URL).
-                        
+                        4. For TECHNICAL SPECIFICATIONS, read any attached datasheet document and quote the real values. Only say "I don't have the datasheet for that on file" if no datasheet is attached.
+                        5. Never invent prices or stock levels. Only recommend parts that appear in the provided inventory.
+                        6. When listing items, include the Shop Name and Price.
+                        7. When providing a link, use markdown format: [Link Text](URL).
+                        8. When recommending an ALTERNATIVE/substitute, justify the match on key specs and warn about differences to verify (pinout/package/ratings). Be precise and technical but concise.
+
                         EXAMPLE INTERACTION:
                         User: "Do you have 15T14?"
-                        Data: [{ name: "15T14", price: "LKR 350", shop: "ElectroFix", link: "/#/product/123" }]
-                        You: "Yes, we have 15T14 available at ElectroFix for LKR 350. You can view it here: [View 15T14](/#/product/123)"
+                        Data: [{ name: "15T14", price: "LKR 350", shop: "ElectroFix", link: "/product/123" }]
+                        You: "Yes, we have 15T14 available at ElectroFix for LKR 350. You can view it here: [View 15T14](/product/123)"
                         `;
 
-                        // Collect File URIs
-                        const fileUris = searchResults
-                            .map(r => r.gemini_file_uri)
-                            .filter(uri => uri && typeof uri === 'string')
-                            .slice(0, 3); // Limit to 3 files to be safe
+                        // Collect File URIs, refreshing any stale ones first.
+                        // Gemini's File API expires uploads after ~48h, so we
+                        // re-upload from R2 whenever the cached URI is older
+                        // than 24h (or has no timestamp, i.e. legacy data).
+                        const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000
+                        const now = Date.now()
+
+                        const candidateItems = searchResults
+                            .filter(r => r.datasheet_r2_key && typeof r.datasheet_r2_key === 'string')
+                            .slice(0, 3) // Limit to 3 files to be safe
+
+                        const fileRefs: GeminiFileRef[] = []
+                        for (const item of candidateItems) {
+                            const uploadedAt = item.gemini_uploaded_at
+                                ? new Date(item.gemini_uploaded_at).getTime()
+                                : 0
+                            const isStale = !item.gemini_file_uri || (now - uploadedAt) > STALE_THRESHOLD_MS
+
+                            if (!isStale) {
+                                fileRefs.push({
+                                    uri: item.gemini_file_uri,
+                                    mimeType: item.gemini_mime_type || 'application/pdf'
+                                })
+                                continue
+                            }
+
+                            // Refresh in-line. Failure is non-fatal: we just
+                            // skip the file and let the AI work with the
+                            // search-results JSON it already has.
+                            const refreshed = await refreshGeminiFile(
+                                item.id,
+                                item.datasheet_r2_key,
+                                c.env.PUBLIC_BUCKET,
+                                c.env.DB,
+                                c.env.GEMINI_API_KEY
+                            )
+                            if (refreshed) fileRefs.push(refreshed)
+                        }
 
                         // Pass 2: Final Response Generation
                         content = await callAI(
@@ -655,15 +858,20 @@ ${memoryContext}
                             finalSystemPrompt,
                             c.env.GEMINI_API_KEY,
                             false,
-                            fileUris,
+                            fileRefs,
                             c.env.AI
                         );
                     }
+                } else {
+                    // A non-product command (CHAT / greeting / general question)
+                    // → answer naturally instead of forcing a product flow.
+                    content = await callAI(messages, conversationalSystemPrompt, c.env.GEMINI_API_KEY, false, [], c.env.AI);
                 }
             } else {
-                // Fallback if AI didn't return JSON (prevents hallucinations from Pass 1)
-                console.log('AI did not return JSON search command. Fallback.');
-                content = "I'm not sure which product you're asking about. Could you please specify the product name or type?";
+                // No JSON command at all → treat it as conversation, not a
+                // canned dead-end. This is the big "feels robotic" fix.
+                console.log('No JSON command; responding conversationally.');
+                content = await callAI(messages, conversationalSystemPrompt, c.env.GEMINI_API_KEY, false, [], c.env.AI);
             }
         } catch (e) {
             console.error('AI Search Logic Error:', e);
@@ -674,8 +882,14 @@ ${memoryContext}
 
         c.header('X-Debug-Version', 'v7-gemini-flash');
 
-        // 5. Background Memory Extraction (Only if logged in)
-        if (user) {
+        // 5. Background Memory Extraction (Only if logged in AND the message
+        // looks like it contains a preference / fact worth remembering).
+        //
+        // Most chat turns are quick searches ("do you have X?", "price?") that
+        // contain nothing memorable. Running the extraction LLM on every turn
+        // doubled our outbound AI calls for zero benefit. We gate it on a
+        // first-person preference signal and minimum length.
+        if (user && shouldExtractMemory(messages[messages.length - 1].content)) {
             c.executionCtx.waitUntil((async () => {
                 try {
                     const lastUserMessage = messages[messages.length - 1].content;
@@ -683,10 +897,10 @@ ${memoryContext}
 
                     const memoryPrompt = `
                     Analyze this interaction and extract any PERMANENT facts or preferences about the user.
-                    
+
                     User: "${lastUserMessage}"
                     AI: "${lastAiResponse}"
-                    
+
                     Rules:
                     1. Extract ONLY facts (e.g., "User prefers Shop X", "User needs 600V parts").
                     2. Ignore transient questions (e.g., "Do you have this?", "Price?").
@@ -694,6 +908,7 @@ ${memoryContext}
                     4. Output raw text of the memory.
                     `;
 
+                    // No fileRefs → callAI uses free Cloudflare Llama, not Gemini.
                     const memoryText = await callAI(
                         [{ role: 'user', content: memoryPrompt }],
                         'You are a memory extractor.',

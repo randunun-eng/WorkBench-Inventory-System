@@ -275,7 +275,7 @@ WHERE catalog_fts MATCH ? AND c.is_public = 1
 ## Deployment
 
 **Deployed:** ✅ December 27, 2025
-**URL:** https://workbench-inventory.randunun.workers.dev
+**URL:** https://www.workbench.cam
 **Status:** Production
 **Database:** Remote (Cloudflare D1)
 

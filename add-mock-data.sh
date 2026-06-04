@@ -3,7 +3,7 @@
 # WorkBench Inventory - Add Mock Data Script
 # This script adds sample shops and products to test the system
 
-API_URL="https://workbench-inventory.randunun.workers.dev"
+API_URL="https://workbench-inventory.randunu-4oc.workers.dev"
 
 echo "=========================================="
 echo "Adding Mock Data to WorkBench Inventory"
@@ -440,5 +440,5 @@ echo "  4. TechSource Pro (techsource@example.com)"
 echo ""
 echo "Password for all shops: password123"
 echo ""
-echo "🌐 Visit: https://workbench-inventory.randunun.workers.dev"
+echo "🌐 Visit: https://workbench-inventory.randunu-4oc.workers.dev"
 echo ""

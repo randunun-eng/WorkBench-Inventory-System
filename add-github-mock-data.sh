@@ -3,7 +3,7 @@
 # WorkBench Inventory - Add Mock Data from GitHub Repository
 # This script adds sample data matching the GitHub mockData.ts exactly
 
-API_URL="https://workbench-inventory.randunun.workers.dev"
+API_URL="https://workbench-inventory.randunu-4oc.workers.dev"
 
 echo "=========================================="
 echo "Adding GitHub Mock Data to WorkBench"
@@ -282,5 +282,5 @@ echo "  6. TechSource Pro - 1 product"
 echo ""
 echo "Password for all shops: password123"
 echo ""
-echo "🌐 Visit: https://workbench-inventory.randunun.workers.dev"
+echo "🌐 Visit: https://workbench-inventory.randunu-4oc.workers.dev"
 echo ""

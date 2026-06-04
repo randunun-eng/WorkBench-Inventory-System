@@ -232,9 +232,10 @@ const StoreFront: React.FC<StoreFrontProps> = ({ sidebarOpen, setSidebarOpen }) 
         {!activeCategoryId && !activeShopId && (
           <div className="bg-gradient-to-r from-brand-dark to-blue-900 rounded-none md:rounded-xl overflow-hidden mb-8 text-white p-6 md:p-10 shadow-lg mx-4 md:mx-0 relative">
             <div className="max-w-xl relative z-10">
-              <h2 className="text-2xl md:text-4xl font-bold mb-4">Find Industrial Components Nearby</h2>
+              <h1 className="text-2xl md:text-4xl font-bold mb-4">Electronic Spare Parts in Sri Lanka</h1>
               <p className="text-blue-100 mb-6 text-sm md:text-base">
-                Locate switch gears, semiconductors, and solar infrastructure available in stock at partner shops.
+                Search live inventory of IGBTs, MOSFETs, power transistors, switch gear and solar inverter repair
+                parts in stock at electronics shops across Sri Lanka. Compare prices in LKR and find components nearby.
               </p>
               <button className="bg-brand-blue text-white px-6 py-2 rounded-md font-semibold hover:bg-blue-600 transition-colors shadow-lg shadow-blue-900/50">
                 Browse Inventory

@@ -77,7 +77,39 @@ shop.get('/:slug', async (c) => {
   })
 })
 
-import { verifyToken } from '../auth'
+// Public payment details for checkout — what a buyer needs to pay this shop
+// directly (its LANKAQR + bank info). Two-segment path, no collision with /:slug.
+shop.get('/:slug/payment', async (c) => {
+  const slug = c.req.param('slug')
+  const row = await c.env.DB.prepare(`
+    SELECT u.shop_name, u.shop_slug,
+           p.business_name, p.account_name, p.bank_name, p.bank_branch, p.account_number,
+           p.lankaqr_merchant_id, p.lankaqr_qr_r2_key, p.contact_phone, p.payment_instructions,
+           p.accepts_payments
+    FROM users u
+    LEFT JOIN shop_payment_details p ON u.id = p.shop_id
+    WHERE u.shop_slug = ? AND u.is_active = 1 AND u.is_approved = 1
+  `).bind(slug).first()
+
+  if (!row) return c.json({ error: 'Shop not found' }, 404)
+
+  return c.json({
+    shop_name: row.shop_name,
+    shop_slug: row.shop_slug,
+    accepts_payments: !!row.accepts_payments,
+    business_name: row.business_name,
+    account_name: row.account_name,
+    bank_name: row.bank_name,
+    bank_branch: row.bank_branch,
+    account_number: row.account_number,
+    lankaqr_merchant_id: row.lankaqr_merchant_id,
+    qr_url: row.lankaqr_qr_r2_key ? `/api/images/${row.lankaqr_qr_r2_key}` : null,
+    contact_phone: row.contact_phone,
+    payment_instructions: row.payment_instructions,
+  })
+})
+
+import { verifyToken, getJwtSecret } from '../auth'
 
 async function hashPassword(password: string): Promise<string> {
   const msgBuffer = new TextEncoder().encode(password);
@@ -91,7 +123,13 @@ shop.put('/profile', async (c) => {
   const authHeader = c.req.header('Authorization')
   if (!authHeader) return c.json({ error: 'Unauthorized' }, 401)
   const token = authHeader.split(' ')[1]
-  const user = await verifyToken(token)
+  let secret: string
+  try {
+      secret = getJwtSecret(c.env)
+  } catch (e: any) {
+      return c.json({ error: 'Server misconfigured', details: e.message }, 500)
+  }
+  const user = await verifyToken(token, secret)
   if (!user) return c.json({ error: 'Invalid token' }, 401)
 
   const { shop_name, contact_info, location, password, logo_r2_key } = await c.req.json()
