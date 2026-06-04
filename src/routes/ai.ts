@@ -516,13 +516,18 @@ ai.post('/chat', async (c) => {
         8. ONLY OUTPUT JSON.
         9. IF THE USER EXPRESSES A NEED OR WANT FOR A PART, IT IS A SEARCH.
         10. For greetings, thanks, small talk, or general / how-it-works questions that are NOT about a specific part, output: { "type": "CHAT" }
+        11. If the user asks for an ALTERNATIVE, SUBSTITUTE, EQUIVALENT, REPLACEMENT, or "what can I use instead of X", output: { "type": "ALTERNATIVE", "query": "X", "category": "<component type>" }
+        12. Whenever you can infer the component TYPE (transistor, mosfet, igbt, diode, capacitor, resistor, voltage regulator, inverter, etc.), include a "category" field — it powers alternative matching.
 
         Examples:
         User: "Hi" -> { "type": "CHAT" }
         User: "How does this work?" -> { "type": "CHAT" }
         User: "Thanks!" -> { "type": "CHAT" }
         User: "Can you help me find something?" -> { "type": "CHAT" }
-        User: "Do you have transistors?" -> { "type": "SEARCH", "query": "transistor" }
+        User: "Do you have transistors?" -> { "type": "SEARCH", "query": "transistor", "category": "transistor" }
+        User: "What can I use instead of 2N3904?" -> { "type": "ALTERNATIVE", "query": "2N3904", "category": "transistor" }
+        User: "Any equivalent for IRFZ44N?" -> { "type": "ALTERNATIVE", "query": "IRFZ44N", "category": "mosfet" }
+        User: "substitute for a 7805 regulator?" -> { "type": "ALTERNATIVE", "query": "7805", "category": "voltage regulator" }
         User: "Do you have ncep products?" -> { "type": "SEARCH", "query": "ncep" }
         User: "Check for 150v mosfets" -> { "type": "SEARCH", "query": "150v mosfet" }
         User: "need 150v mosfet" -> { "type": "SEARCH", "query": "150v mosfet" }
@@ -554,11 +559,13 @@ ai.post('/chat', async (c) => {
                 const command = JSON.parse(jsonMatch[0]);
                 console.log('Parsed Command:', command);
 
-                if (command.type === 'SEARCH' || command.type === 'COMPARE' || command.type === 'SELECT') {
+                if (command.type === 'SEARCH' || command.type === 'COMPARE' || command.type === 'SELECT' || command.type === 'ALTERNATIVE') {
                     performedSearch = true;
+                    const isAlt = command.type === 'ALTERNATIVE';
+                    const category = (command.category || '').toString().replace(/"/g, '').trim();
 
                     let cleanQuery = '';
-                    if (command.type === 'SEARCH') cleanQuery = command.query.replace(/"/g, '');
+                    if (command.type === 'SEARCH' || isAlt) cleanQuery = (command.query || '').replace(/"/g, '');
                     if (command.type === 'COMPARE') cleanQuery = command.items.join(' '); // tokens are OR'd downstream
                     if (command.type === 'SELECT') cleanQuery = command.criteria; // Search by criteria
 
@@ -681,6 +688,38 @@ ai.post('/chat', async (c) => {
                     }
                     searchResults = Array.from(uniqueMap.values()).slice(0, 5);
 
+                    // Alternatives: when the user explicitly asks for a substitute,
+                    // OR we found nothing but know the component type, pull
+                    // same-category items as candidate alternatives for the AI to
+                    // evaluate against the requested part's typical specs.
+                    let suggestAlternatives = isAlt;
+                    const requestedPart = cleanQuery;
+                    if ((isAlt || searchResults.length === 0) && (category || cleanQuery)) {
+                        const term = `%${category || cleanQuery}%`;
+                        const altRes = await c.env.DB.prepare(`
+                            SELECT
+                                c.id, c.name, c.description, c.specifications, c.datasheet_r2_key,
+                                c.gemini_file_uri, c.gemini_uploaded_at, c.gemini_mime_type,
+                                si.stock_qty, si.price, si.currency, u.shop_name
+                            FROM catalog_items c
+                            LEFT JOIN categories cat ON c.category_id = cat.id
+                            LEFT JOIN shop_inventory si ON c.id = si.catalog_item_id AND si.is_visible_to_network = 1
+                            LEFT JOIN users u ON si.shop_id = u.id
+                            WHERE c.is_public = 1 AND (cat.name LIKE ? OR c.name LIKE ? OR c.description LIKE ?)
+                            LIMIT 12
+                        `).bind(term, term, term).all();
+
+                        const altItems = (altRes.results || []).filter((it: any) =>
+                            !(requestedPart && String(it.name).toLowerCase() === requestedPart.toLowerCase())
+                        );
+                        if ((isAlt || searchResults.length === 0) && altItems.length > 0) {
+                            const m = new Map<string, any>();
+                            for (const it of [...searchResults, ...altItems]) if (!m.has(it.id)) m.set(it.id, it);
+                            searchResults = Array.from(m.values()).slice(0, 6);
+                            suggestAlternatives = true;
+                        }
+                    }
+
                     console.log('Search Results:', searchResults);
 
                     // Handle Empty Results - HARD STOP to prevent hallucinations
@@ -726,12 +765,21 @@ ai.post('/chat', async (c) => {
                             link: `/product/${r.id}`
                         }));
 
+                        const altContext = suggestAlternatives ? `
+
+ALTERNATIVES MODE:
+- The user is looking for "${requestedPart}"${category ? ` (a ${category})` : ''}, which may be out of stock or not carried by us.
+- Using your electronics knowledge of "${requestedPart}"'s typical characteristics (type/polarity, voltage/current/power ratings, package, pinout), recommend the CLOSEST substitutes from the inventory JSON above.
+- For each suggestion, briefly justify it on key electrical specs and FLAG any differences the user must verify (pinout/package, max voltage/current, gate-threshold, hFE, etc.).
+- Recommend ONLY items present in the inventory JSON. If none is a sound electrical match, say so honestly and tell them which spec to look for.
+` : '';
+
                         const contextContent = `OFFICIAL INVENTORY DATA (JSON):
 ${JSON.stringify(inventoryContext, null, 2)}
 
 Technical Specs:
 ${technicalDetails}
-
+${altContext}
 CRITICAL INSTRUCTIONS:
 - For PRICES, STOCK, SHOP NAMES and LINKS: use ONLY the JSON data above. Never invent or change these numbers.
 - For TECHNICAL SPECIFICATIONS (voltage, current, power, package/pinout, type, applications, etc.): if a datasheet document is attached to this message, READ IT and quote the exact values. The attached datasheets belong to the products listed in the JSON above.
@@ -747,19 +795,18 @@ ${memoryContext}
 `;
 
                         const finalSystemPrompt = `
-                        You are WorkBench AI, a helpful inventory assistant.
-                        
-                        Your goal is to help the user find and buy components using the provided inventory data.
-                        
+                        You are WorkBench AI — an EXPERT electronics components assistant for a Sri Lankan parts marketplace. You know semiconductor and component equivalents, you read datasheets, and you match parts by their electrical specifications. You help users find parts, evaluate datasheets, and choose suitable in-stock alternatives.
+
                         CRITICAL RULES:
                         1. USE THE PROVIDED JSON DATA EXACTLY for price, stock, shop and links.
                         2. DO NOT USE PLACEHOLDERS like "[Insert price]" or "[Insert description]".
                         3. If the data is in the JSON, output it directly.
                         4. For TECHNICAL SPECIFICATIONS, read any attached datasheet document and quote the real values. Only say "I don't have the datasheet for that on file" if no datasheet is attached.
-                        5. Never invent prices or stock levels.
+                        5. Never invent prices or stock levels. Only recommend parts that appear in the provided inventory.
                         6. When listing items, include the Shop Name and Price.
                         7. When providing a link, use markdown format: [Link Text](URL).
-                        
+                        8. When recommending an ALTERNATIVE/substitute, justify the match on key specs and warn about differences to verify (pinout/package/ratings). Be precise and technical but concise.
+
                         EXAMPLE INTERACTION:
                         User: "Do you have 15T14?"
                         Data: [{ name: "15T14", price: "LKR 350", shop: "ElectroFix", link: "/product/123" }]
