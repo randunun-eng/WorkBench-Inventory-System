@@ -301,7 +301,7 @@ Info: Database fields + Full technical specs from images
 ### Manual Test Cases
 
 #### Test 1: Product with Datasheet
-1. Go to https://workbench-inventory.randunu-4oc.workers.dev
+1. Go to https://www.workbench.cam
 2. Open Chatbot tab
 3. Type: "Tell me about 2SC3866"
 4. Verify:
@@ -326,14 +326,14 @@ Info: Database fields + Full technical specs from images
    - ✅ All expandable sections work
 
 ### Example Test URL
-https://workbench-inventory.randunu-4oc.workers.dev/api/images/621a3dfd-787a-4c3f-ae18-28820a6c4abf/bd319177-5b79-46df-9849-2c816e4f2dad
+https://www.workbench.cam/api/images/621a3dfd-787a-4c3f-ae18-28820a6c4abf/bd319177-5b79-46df-9849-2c816e4f2dad
 
 **Expected:** Datasheet image for 2SC3866 transistor
 
 ## Deployment
 
 **Status:** ✅ Deployed
-**URL:** https://workbench-inventory.randunu-4oc.workers.dev
+**URL:** https://www.workbench.cam
 **Version:** v4-with-datasheet-analysis
 **Date:** November 27, 2025
 

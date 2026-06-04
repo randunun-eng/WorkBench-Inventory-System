@@ -178,7 +178,7 @@ Updated all field references:
 
 ## Live System
 
-**URL**: https://workbench-inventory.randunu-4oc.workers.dev
+**URL**: https://www.workbench.cam
 
 **Status**: ✅ Fully Operational
 - All 9 products displaying correctly

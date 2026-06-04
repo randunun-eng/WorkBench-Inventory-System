@@ -1,7 +1,7 @@
 # Quick Reference - WorkBench Inventory System
 
 ## 🌐 Live URL
-https://workbench-inventory.randunu-4oc.workers.dev
+https://www.workbench.cam
 
 ---
 
@@ -85,16 +85,16 @@ DELETE /api/inventory/:id
 
 ```bash
 # Test API
-curl https://workbench-inventory.randunu-4oc.workers.dev/api
+curl https://www.workbench.cam/api
 
 # Search products
-curl "https://workbench-inventory.randunu-4oc.workers.dev/api/search?q=solar"
+curl "https://www.workbench.cam/api/search?q=solar"
 
 # View shop
-curl "https://workbench-inventory.randunu-4oc.workers.dev/api/shop/electrofix-components"
+curl "https://www.workbench.cam/api/shop/electrofix-components"
 
 # Login
-curl -X POST https://workbench-inventory.randunu-4oc.workers.dev/auth/login \
+curl -X POST https://www.workbench.cam/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"electrofix@example.com","password":"password123"}'
 ```

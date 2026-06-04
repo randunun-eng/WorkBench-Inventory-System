@@ -2,13 +2,13 @@
 
 ## 🚀 Your System is Live!
 
-**Production URL**: https://workbench-inventory.randunu-4oc.workers.dev
+**Production URL**: https://www.workbench.cam
 
 ---
 
 ## Step 1: Create Your First Shop
 
-1. Visit: https://workbench-inventory.randunu-4oc.workers.dev/join
+1. Visit: https://www.workbench.cam/join
 
 2. Fill in your shop details:
    - **Shop Name**: e.g., "ElectroFix Components"
@@ -30,7 +30,7 @@
 
 ```bash
 # Replace with your actual email and password
-curl -X POST https://workbench-inventory.randunu-4oc.workers.dev/auth/login \
+curl -X POST https://www.workbench.cam/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "your@email.com",
@@ -42,7 +42,7 @@ This will return a token. Copy it and use it in the next request:
 
 ```bash
 # Replace YOUR_TOKEN_HERE with the token from above
-curl -X POST https://workbench-inventory.randunu-4oc.workers.dev/api/inventory \
+curl -X POST https://www.workbench.cam/api/inventory \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN_HERE" \
   -d '{
@@ -72,7 +72,7 @@ Here's a script to add several products at once:
 #!/bin/bash
 
 # First, login and get token
-TOKEN=$(curl -s -X POST https://workbench-inventory.randunu-4oc.workers.dev/auth/login \
+TOKEN=$(curl -s -X POST https://www.workbench.cam/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "your@email.com",
@@ -82,7 +82,7 @@ TOKEN=$(curl -s -X POST https://workbench-inventory.randunu-4oc.workers.dev/auth
 echo "Token: $TOKEN"
 
 # Product 1: MCB
-curl -X POST https://workbench-inventory.randunu-4oc.workers.dev/api/inventory \
+curl -X POST https://www.workbench.cam/api/inventory \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
@@ -100,7 +100,7 @@ curl -X POST https://workbench-inventory.randunu-4oc.workers.dev/api/inventory \
   }'
 
 # Product 2: IGBT Module
-curl -X POST https://workbench-inventory.randunu-4oc.workers.dev/api/inventory \
+curl -X POST https://www.workbench.cam/api/inventory \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
@@ -118,7 +118,7 @@ curl -X POST https://workbench-inventory.randunu-4oc.workers.dev/api/inventory \
   }'
 
 # Product 3: Solar Inverter
-curl -X POST https://workbench-inventory.randunu-4oc.workers.dev/api/inventory \
+curl -X POST https://www.workbench.cam/api/inventory \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
@@ -145,17 +145,17 @@ Save this as `add_products.sh`, make it executable (`chmod +x add_products.sh`),
 ## Step 4: View Your Products
 
 ### On the Website:
-Visit: https://workbench-inventory.randunu-4oc.workers.dev/
+Visit: https://www.workbench.cam/
 
 Your products should now appear on the storefront!
 
 ### Via API:
 ```bash
 # Search for products
-curl "https://workbench-inventory.randunu-4oc.workers.dev/api/search?q=schneider" | jq .
+curl "https://www.workbench.cam/api/search?q=schneider" | jq .
 
 # View your shop's products
-curl "https://workbench-inventory.randunu-4oc.workers.dev/api/shop/your-shop-slug" | jq .
+curl "https://www.workbench.cam/api/shop/your-shop-slug" | jq .
 ```
 
 ---
@@ -189,7 +189,7 @@ curl "https://workbench-inventory.randunu-4oc.workers.dev/api/shop/your-shop-slu
 # Get product ID from your inventory listing first
 PRODUCT_ID="your-product-id"
 
-curl -X PUT https://workbench-inventory.randunu-4oc.workers.dev/api/inventory/$PRODUCT_ID \
+curl -X PUT https://www.workbench.cam/api/inventory/$PRODUCT_ID \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
@@ -200,13 +200,13 @@ curl -X PUT https://workbench-inventory.randunu-4oc.workers.dev/api/inventory/$P
 
 ### Delete a Product
 ```bash
-curl -X DELETE https://workbench-inventory.randunu-4oc.workers.dev/api/inventory/$PRODUCT_ID \
+curl -X DELETE https://www.workbench.cam/api/inventory/$PRODUCT_ID \
   -H "Authorization: Bearer $TOKEN" | jq .
 ```
 
 ### List Your Inventory
 ```bash
-curl https://workbench-inventory.randunu-4oc.workers.dev/api/inventory \
+curl https://www.workbench.cam/api/inventory \
   -H "Authorization: Bearer $TOKEN" | jq .
 ```
 

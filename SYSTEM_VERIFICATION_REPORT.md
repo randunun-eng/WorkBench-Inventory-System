@@ -88,14 +88,14 @@ Products: 3
 
 ### Deployment
 - **Platform**: Cloudflare Workers + Assets
-- **URL**: https://workbench-inventory.randunu-4oc.workers.dev
+- **URL**: https://www.workbench.cam
 - **JavaScript Bundle**: ✅ Accessible
 - **HTML**: ✅ Loading correctly
 - **API URL**: ✅ Properly configured in bundle
 
 ### Environment Configuration
 ```
-VITE_API_BASE_URL=https://workbench-inventory.randunu-4oc.workers.dev
+VITE_API_BASE_URL=https://www.workbench.cam
 ```
 ✅ Correctly embedded in production build
 
@@ -228,7 +228,7 @@ VITE_API_BASE_URL=https://workbench-inventory.randunu-4oc.workers.dev
 ## Access Information
 
 ### Live Application
-**URL**: https://workbench-inventory.randunu-4oc.workers.dev
+**URL**: https://www.workbench.cam
 
 ### Test Credentials (All Shops)
 - **Password**: `password123`
@@ -249,10 +249,10 @@ wrangler d1 execute workbench-db --remote --command \
   "SELECT COUNT(*) FROM inventory_items"
 
 # Test search API
-curl https://workbench-inventory.randunu-4oc.workers.dev/api/search?q= | jq length
+curl https://www.workbench.cam/api/search?q= | jq length
 
 # Test shop API
-curl https://workbench-inventory.randunu-4oc.workers.dev/api/shop/electrofix-components
+curl https://www.workbench.cam/api/shop/electrofix-components
 
 # Rebuild frontend
 cd frontend && npm run build
@@ -266,7 +266,7 @@ wrangler deploy
 ## Troubleshooting
 
 ### If products don't show
-1. Check API: `curl https://workbench-inventory.randunu-4oc.workers.dev/api/search?q=`
+1. Check API: `curl https://www.workbench.cam/api/search?q=`
 2. Verify 9 products returned
 3. Check browser console for errors
 
@@ -277,7 +277,7 @@ wrangler deploy
 
 ### If frontend blank
 1. Check JS bundle loads: view page source, find `/assets/index-*.js`
-2. Verify API URL in bundle: `grep -o 'workbench-inventory.randunu-4oc.workers.dev' frontend/dist/assets/index-*.js`
+2. Verify API URL in bundle: `grep -o 'www.workbench.cam' frontend/dist/assets/index-*.js`
 3. Rebuild: `cd frontend && rm -rf dist && npm run build && cd .. && wrangler deploy`
 
 ---
@@ -287,7 +287,7 @@ wrangler deploy
 All systems verified and working correctly. The mock data is live and accessible through the frontend application.
 
 **Next Steps**:
-- Visit https://workbench-inventory.randunu-4oc.workers.dev
+- Visit https://www.workbench.cam
 - Browse the 9 products from 6 shops
 - Test product detail pages
 - Try shop-specific views

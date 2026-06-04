@@ -38,7 +38,7 @@ wrangler deploy
 
 ### Step 4: Test Email Delivery
 
-1. Go to https://workbench-inventory.randunu-4oc.workers.dev/join
+1. Go to https://www.workbench.cam/join
 2. Register a NEW test shop (e.g., "Test Shop 2", test2@example.com, password123)
 3. Check your inbox at **randunun@gmail.com**
 4. You should receive an email with:
