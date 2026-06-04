@@ -258,6 +258,50 @@ export const api = {
     return await response.json();
   },
 
+  // --- Marketplace orders ---
+  async createOrder(payload: { shop_slug: string; buyer: any; items: any[] }): Promise<any> {
+    const r = await fetch(`${API_BASE_URL}/api/orders`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Order failed');
+    return data;
+  },
+
+  async submitOrderPayment(orderId: string, reference: string): Promise<any> {
+    const r = await fetch(`${API_BASE_URL}/api/orders/${orderId}/payment`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reference }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Failed to submit payment');
+    return data;
+  },
+
+  async getOrder(orderId: string): Promise<any> {
+    const r = await fetch(`${API_BASE_URL}/api/orders/${orderId}`);
+    if (!r.ok) return null;
+    return await r.json();
+  },
+
+  async getShopOrders(status?: string): Promise<any[]> {
+    if (!this.token) return [];
+    const q = status ? `?status=${encodeURIComponent(status)}` : '';
+    const r = await fetch(`${API_BASE_URL}/api/orders/shop${q}`, {
+      headers: { 'Authorization': `Bearer ${this.token}` },
+    });
+    if (!r.ok) return [];
+    return await r.json();
+  },
+
+  async orderAction(orderId: string, action: 'confirm' | 'reject' | 'fulfill'): Promise<any> {
+    const r = await fetch(`${API_BASE_URL}/api/orders/${orderId}/${action}`, {
+      method: 'POST', headers: { 'Authorization': `Bearer ${this.token}` },
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Action failed');
+    return data;
+  },
+
   async uploadImage(file: File, isPrivate: boolean = false): Promise<{ key: string; url: string }> {
     const formData = new FormData();
     formData.append('file', file);

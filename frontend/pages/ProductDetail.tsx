@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api, APIProduct } from '../api';
 import type { Product, ShopProfile } from '../types';
-import { ArrowLeft, Check, ShieldCheck, MapPin, Store, MessageCircle, Phone, Navigation, Clock, FileText } from 'lucide-react';
+import { ArrowLeft, Check, ShieldCheck, MapPin, Store, MessageCircle, Phone, Navigation, Clock, FileText, ShoppingCart } from 'lucide-react';
+import { cart } from '../cart';
 
 import ChatSidebar from '../components/ChatSidebar';
 
@@ -10,6 +11,7 @@ const ProductDetail: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const [product, setProduct] = useState<Product | null>(null);
     const [shop, setShop] = useState<ShopProfile | null>(null);
+    const [addedToCart, setAddedToCart] = useState(false);
     const [loading, setLoading] = useState(true);
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [isShopOnline, setIsShopOnline] = useState(true); // Mock online status for now
@@ -151,7 +153,7 @@ const ProductDetail: React.FC = () => {
                         </div>
 
                         <div className="bg-slate-50 p-4 rounded-lg mb-6 border border-slate-100">
-                            <div className="flex items-baseline gap-2 mb-2">
+                            <div className="flex items-baseline gap-2 mb-3">
                                 {formattedPrice ? (
                                     <>
                                         <span className="text-3xl font-bold text-gray-900">{formattedPrice}</span>
@@ -161,6 +163,32 @@ const ProductDetail: React.FC = () => {
                                     <span className="text-2xl font-bold text-brand-blue">Contact for Price</span>
                                 )}
                             </div>
+                            <button
+                                onClick={() => {
+                                    if (product.price === null || product.stockQty <= 0 || !product.shopId) return;
+                                    cart.add({
+                                        catalog_item_id: product.id,
+                                        name: product.name,
+                                        price: product.price as number,
+                                        currency: product.currency,
+                                        shop_slug: product.shopId,
+                                        shop_name: product.shopName || product.shopId,
+                                        image: product.image,
+                                    });
+                                    setAddedToCart(true);
+                                    setTimeout(() => setAddedToCart(false), 1500);
+                                }}
+                                disabled={product.price === null || product.stockQty <= 0}
+                                className={`w-full flex items-center justify-center gap-2 py-3 rounded-md font-semibold transition-colors ${
+                                    addedToCart ? 'bg-emerald-500 text-white'
+                                        : (product.price !== null && product.stockQty > 0) ? 'bg-brand-blue text-white hover:bg-blue-600'
+                                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                }`}
+                            >
+                                {addedToCart ? <><Check size={18} /> Added to Cart</>
+                                    : (product.price !== null && product.stockQty > 0) ? <><ShoppingCart size={18} /> Add to Cart</>
+                                    : (product.price === null ? 'Contact for Price' : 'Out of Stock')}
+                            </button>
                         </div>
 
                         {/* Specs Table */}

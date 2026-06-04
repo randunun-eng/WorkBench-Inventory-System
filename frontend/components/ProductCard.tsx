@@ -1,13 +1,32 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Product } from '../types';
-import { MapPin, Store, Package } from 'lucide-react';
+import { MapPin, Store, Package, ShoppingCart, Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { cart } from '../cart';
 
 interface ProductCardProps {
   product: Product;
 }
 
 const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
+  const [added, setAdded] = useState(false);
+
+  const canBuy = product.price !== null && product.stockQty > 0 && !!product.shopId;
+
+  const handleAdd = () => {
+    if (!canBuy) return;
+    cart.add({
+      catalog_item_id: product.id,
+      name: product.name,
+      price: product.price as number,
+      currency: product.currency,
+      shop_slug: product.shopId,
+      shop_name: product.shopName || product.shopId,
+      image: product.image,
+    });
+    setAdded(true);
+    setTimeout(() => setAdded(false), 1500);
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 border border-gray-100 overflow-hidden flex flex-col h-full group">
@@ -71,6 +90,21 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
               <span>{product.shopName || (product.shopId ? product.shopId.replace(/-/g, ' ') : 'Unknown Shop')}</span>
             </div>
           </div>
+
+          {/* Add to cart */}
+          <button
+            onClick={handleAdd}
+            disabled={!canBuy}
+            className={`mt-2 w-full flex items-center justify-center gap-1.5 text-xs font-semibold py-2 rounded-md transition-colors ${
+              added ? 'bg-emerald-500 text-white'
+                : canBuy ? 'bg-brand-blue text-white hover:bg-blue-600'
+                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            }`}
+          >
+            {added ? <><Check size={14} /> Added</>
+              : canBuy ? <><ShoppingCart size={14} /> Add to Cart</>
+              : (product.price === null ? 'Call for Price' : 'Out of Stock')}
+          </button>
         </div>
       </div>
     </div>

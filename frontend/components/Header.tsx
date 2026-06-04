@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Menu, MessageCircle, User, LogOut, LayoutDashboard, Home } from 'lucide-react';
+import { Search, Menu, MessageCircle, User, LogOut, LayoutDashboard, Home, ShoppingCart } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useCart } from '../cart';
 
 interface HeaderProps {
   toggleSidebar: () => void;
@@ -24,6 +25,8 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
   const navigate = useNavigate();
+  const cartItems = useCart();
+  const cartCount = cartItems.reduce((s, i) => s + i.qty, 0);
 
   // Check for logged-in user
   useEffect(() => {
@@ -144,6 +147,23 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
             >
               <Home size={24} />
               <span className="text-xs mt-1 hidden md:block">Home</span>
+            </Link>
+
+            {/* Cart Icon */}
+            <Link
+              to="/cart"
+              className="relative flex flex-col items-center cursor-pointer text-gray-300 hover:text-brand-blue transition-colors"
+              title="Cart"
+            >
+              <div className="relative">
+                <ShoppingCart size={24} />
+                {cartCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-brand-blue text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                    {cartCount > 9 ? '9+' : cartCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-xs mt-1 hidden md:block">Cart</span>
             </Link>
 
             {user ? (

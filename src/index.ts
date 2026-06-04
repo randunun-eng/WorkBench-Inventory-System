@@ -26,6 +26,7 @@ import categories from './routes/categories'
 import images from './routes/images'
 import subscription from './routes/subscription'
 import payments from './routes/payments'
+import orders from './routes/orders'
 
 const app = new Hono<{ Bindings: Bindings }>()
 
@@ -63,6 +64,7 @@ app.route('/api/admin', admin)
 app.route('/api/categories', categories)
 app.route('/api/subscription', subscription)
 app.route('/api/payments', payments)
+app.route('/api/orders', orders)
 app.route('/api/presence', presence)
 app.route('/api/vision', vision)
 app.route('/api/images', images)

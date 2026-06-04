@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import {
   Plus, Edit, Trash2, Image, FileText, Package, DollarSign,
   Eye, EyeOff, Upload, X, Save, Search, Filter, History, TrendingUp,
-  MessageSquare, Layers, Bot, Store, LogOut, Shield, Settings, Sparkles, Wallet
+  MessageSquare, Layers, Bot, Store, LogOut, Shield, Settings, Sparkles, Wallet, ShoppingBag
 } from 'lucide-react';
 import InventoryList from '../src/pages/dashboard/InventoryList';
 import PaymentSettings from '../components/PaymentSettings';
+import OrdersManagement from '../components/OrdersManagement';
 import CategoryList from '../src/pages/dashboard/CategoryList';
 import Chat from '../src/pages/dashboard/Chat';
 import Network from '../src/pages/dashboard/Network';
@@ -88,7 +89,7 @@ const Dashboard: React.FC = () => {
   const [selectedItemForHistory, setSelectedItemForHistory] = useState<InventoryItem | null>(null);
 
   // View State
-  const [activeView, setActiveView] = useState<'inventory' | 'categories' | 'chat' | 'chatbot' | 'network' | 'vision' | 'admin' | 'settings' | 'payments'>('inventory');
+  const [activeView, setActiveView] = useState<'inventory' | 'categories' | 'chat' | 'chatbot' | 'network' | 'vision' | 'admin' | 'settings' | 'payments' | 'orders'>('inventory');
   const [activeChatRoomId, setActiveChatRoomId] = useState<string | null>(null);
 
   // Category Management State
@@ -710,6 +711,13 @@ const Dashboard: React.FC = () => {
           )}
 
           <button
+            onClick={() => setActiveView('orders')}
+            className={`w-full text-left px-4 py-2 rounded-md flex items-center gap-3 ${activeView === 'orders' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            <ShoppingBag size={20} /> Orders
+          </button>
+
+          <button
             onClick={() => setActiveView('payments')}
             className={`w-full text-left px-4 py-2 rounded-md flex items-center gap-3 ${activeView === 'payments' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
           >
@@ -788,6 +796,7 @@ const Dashboard: React.FC = () => {
                   {activeView === 'admin' && 'User Management'}
                   {activeView === 'settings' && 'Shop Settings'}
                   {activeView === 'payments' && 'Payment Settings'}
+                  {activeView === 'orders' && 'Orders'}
                 </h1>
                 <p className="text-sm text-gray-600">{user.shop_name || user.email}</p>
               </div>
@@ -1011,6 +1020,8 @@ const Dashboard: React.FC = () => {
             <ShopSettings />
           ) : activeView === 'payments' ? (
             <PaymentSettings />
+          ) : activeView === 'orders' ? (
+            <OrdersManagement />
           ) : (
             <div className="text-center py-20">
               <p className="text-gray-600">Feature coming soon...</p>

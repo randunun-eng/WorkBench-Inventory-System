@@ -7,6 +7,9 @@ import JoinRequest from './pages/JoinRequest';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import PasswordResetRequest from './pages/PasswordResetRequest';
+import CartPage from './pages/CartPage';
+import Checkout from './pages/Checkout';
+import OrderConfirmation from './pages/OrderConfirmation';
 
 const App: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -32,6 +35,36 @@ const App: React.FC = () => {
               <>
                 <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
                 <ProductDetail />
+                <Footer />
+              </>
+            }
+          />
+          <Route
+            path="/cart"
+            element={
+              <>
+                <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+                <CartPage />
+                <Footer />
+              </>
+            }
+          />
+          <Route
+            path="/checkout"
+            element={
+              <>
+                <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+                <Checkout />
+                <Footer />
+              </>
+            }
+          />
+          <Route
+            path="/order/:id"
+            element={
+              <>
+                <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+                <OrderConfirmation />
                 <Footer />
               </>
             }
