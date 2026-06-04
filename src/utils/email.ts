@@ -209,3 +209,63 @@ View Shop: https://workbench-inventory.randunu-4oc.workers.dev/api/shop/${data.s
     return false;
   }
 }
+
+// Notify a seller about an order — on placement and again when the buyer
+// submits payment (best-effort; skipped if RESEND_API_KEY is not configured).
+export async function sendSellerOrderNotification(
+  resendApiKey: string,
+  data: {
+    sellerEmail: string;
+    shopName?: string;
+    orderId: string;
+    buyerName?: string;
+    buyerPhone?: string;
+    total: number;
+    currency: string;
+    stage: 'placed' | 'paid';   // 'placed' = new order; 'paid' = buyer submitted payment
+  }
+) {
+  const isPaid = data.stage === 'paid';
+  const subject = isPaid
+    ? `💰 Payment submitted for order #${data.orderId.slice(0, 8)} — please confirm`
+    : `🛒 New order #${data.orderId.slice(0, 8)} on WorkBench`;
+  const cta = isPaid
+    ? 'The buyer says they have paid. Verify the funds in your account, then confirm the order in your dashboard to dispatch it.'
+    : 'A buyer placed an order. They will pay via your LANKAQR shortly.';
+  const dash = 'https://www.workbench.cam/dashboard';
+
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${resendApiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'WorkBench <onboarding@resend.dev>',
+        to: [data.sellerEmail],
+        subject,
+        html: `
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#0f172a">
+  <div style="background:#0f172a;color:#fff;padding:18px;border-radius:8px 8px 0 0">
+    <h2 style="margin:0">${isPaid ? '💰 Payment Submitted' : '🛒 New Order'}</h2>
+    <p style="margin:4px 0 0;color:#cbd5e1">${data.shopName || 'Your shop'} · WorkBench</p>
+  </div>
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;padding:20px">
+    <p>${cta}</p>
+    <table style="width:100%;font-size:14px;margin:12px 0">
+      <tr><td style="color:#64748b">Order</td><td style="text-align:right">#${data.orderId.slice(0, 8)}</td></tr>
+      <tr><td style="color:#64748b">Buyer</td><td style="text-align:right">${data.buyerName || '-'}</td></tr>
+      <tr><td style="color:#64748b">Phone</td><td style="text-align:right">${data.buyerPhone || '-'}</td></tr>
+      <tr><td style="color:#64748b">Total</td><td style="text-align:right;font-weight:bold">${data.currency} ${Number(data.total).toFixed(2)}</td></tr>
+    </table>
+    <a href="${dash}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 22px;text-decoration:none;border-radius:6px">Open Dashboard</a>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:12px;margin-top:14px">Automated notification from WorkBench</p>
+</div>`,
+        text: `${subject}\n\n${cta}\n\nOrder: #${data.orderId.slice(0, 8)}\nBuyer: ${data.buyerName || '-'} (${data.buyerPhone || '-'})\nTotal: ${data.currency} ${Number(data.total).toFixed(2)}\n\nManage: ${dash}`,
+      }),
+    });
+    return response.ok;
+  } catch (error) {
+    console.error('Seller order notification error:', error);
+    return false;
+  }
+}

@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { authMiddleware } from '../auth'
 import { v4 as uuidv4 } from 'uuid'
+import { sendSellerOrderNotification } from '../utils/email'
 
 // Marketplace orders. Buyers (guests allowed) place one order per seller and
 // pay that seller directly via LANKAQR; the seller confirms receipt.
@@ -22,7 +23,7 @@ orders.post('/', async (c) => {
     }
 
     const shop = await c.env.DB.prepare(`
-        SELECT u.id, u.shop_name, p.accepts_payments
+        SELECT u.id, u.shop_name, u.email, p.accepts_payments
         FROM users u LEFT JOIN shop_payment_details p ON u.id = p.shop_id
         WHERE u.shop_slug = ? AND u.is_active = 1 AND u.is_approved = 1
     `).bind(shop_slug).first()
@@ -68,6 +69,15 @@ orders.post('/', async (c) => {
     ]
     await c.env.DB.batch(stmts)
 
+    // Notify the seller a new order arrived (best-effort)
+    if (c.env.RESEND_API_KEY && shop.email) {
+        c.executionCtx.waitUntil(sendSellerOrderNotification(c.env.RESEND_API_KEY, {
+            sellerEmail: shop.email as string, shopName: shop.shop_name as string,
+            orderId, buyerName: buyer.name, buyerPhone: buyer.phone,
+            total: subtotal, currency, stage: 'placed',
+        }))
+    }
+
     return c.json({ ok: true, order_id: orderId, shop_name: shop.shop_name, subtotal, currency, status: 'pending_payment' }, 201)
 })
 
@@ -103,7 +113,11 @@ orders.post('/:id/payment', async (c) => {
     if (!reference || String(reference).trim().length < 3) {
         return c.json({ error: 'A valid payment reference is required.' }, 400)
     }
-    const order = await c.env.DB.prepare(`SELECT id, status FROM orders WHERE id = ?`).bind(id).first()
+    const order = await c.env.DB.prepare(`
+        SELECT o.id, o.status, o.subtotal, o.currency, o.buyer_name, o.buyer_phone,
+               u.email AS seller_email, u.shop_name
+        FROM orders o JOIN users u ON o.shop_id = u.id WHERE o.id = ?
+    `).bind(id).first()
     if (!order) return c.json({ error: 'Order not found' }, 404)
     if (order.status !== 'pending_payment') {
         return c.json({ error: `Order is already ${order.status}.` }, 409)
@@ -111,6 +125,16 @@ orders.post('/:id/payment', async (c) => {
     await c.env.DB.prepare(
         `UPDATE orders SET payment_reference = ?, status = 'payment_submitted', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
     ).bind(String(reference).trim(), id).run()
+
+    // Tell the seller to verify + confirm (best-effort)
+    if (c.env.RESEND_API_KEY && order.seller_email) {
+        c.executionCtx.waitUntil(sendSellerOrderNotification(c.env.RESEND_API_KEY, {
+            sellerEmail: order.seller_email as string, shopName: order.shop_name as string,
+            orderId: id, buyerName: order.buyer_name as string, buyerPhone: order.buyer_phone as string,
+            total: order.subtotal as number, currency: order.currency as string, stage: 'paid',
+        }))
+    }
+
     return c.json({ ok: true, status: 'payment_submitted' })
 })
 
@@ -168,6 +192,21 @@ orders.post('/:id/reject', authMiddleware, async (c) => {
         `UPDATE orders SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
     ).bind(id).run()
     return c.json({ ok: true, status: 'cancelled' })
+})
+
+// -----------------------------------------------------------------------------
+// GET /lookup?phone= — a guest buyer looks up their own orders by phone.
+// Declared before GET /:id so "lookup" isn't treated as an order id.
+// -----------------------------------------------------------------------------
+orders.get('/lookup', async (c) => {
+    const phone = (c.req.query('phone') || '').trim()
+    if (phone.length < 4) return c.json({ error: 'Enter your phone number.' }, 400)
+    const rows = await c.env.DB.prepare(`
+        SELECT o.id, o.status, o.subtotal, o.currency, o.created_at, u.shop_name
+        FROM orders o JOIN users u ON o.shop_id = u.id
+        WHERE o.buyer_phone = ? ORDER BY o.created_at DESC LIMIT 50
+    `).bind(phone).all()
+    return c.json(rows.results || [])
 })
 
 // -----------------------------------------------------------------------------

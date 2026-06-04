@@ -514,9 +514,14 @@ ai.post('/chat', async (c) => {
            - "Price?" -> Search for the last discussed item.
            - "I need from Shop X" -> Search for the last discussed item.
         8. ONLY OUTPUT JSON.
-        9. IF THE USER EXPRESSES A NEED OR WANT, IT IS A SEARCH.
+        9. IF THE USER EXPRESSES A NEED OR WANT FOR A PART, IT IS A SEARCH.
+        10. For greetings, thanks, small talk, or general / how-it-works questions that are NOT about a specific part, output: { "type": "CHAT" }
 
         Examples:
+        User: "Hi" -> { "type": "CHAT" }
+        User: "How does this work?" -> { "type": "CHAT" }
+        User: "Thanks!" -> { "type": "CHAT" }
+        User: "Can you help me find something?" -> { "type": "CHAT" }
         User: "Do you have transistors?" -> { "type": "SEARCH", "query": "transistor" }
         User: "Do you have ncep products?" -> { "type": "SEARCH", "query": "ncep" }
         User: "Check for 150v mosfets" -> { "type": "SEARCH", "query": "150v mosfet" }
@@ -533,6 +538,11 @@ ai.post('/chat', async (c) => {
 
         let searchResults: any[] = []
         let performedSearch = false
+
+        // Friendly persona for anything that isn't a product lookup (greetings,
+        // "how does this work", thanks, general advice). Keeps the bot natural
+        // instead of dead-ending on a canned line.
+        const conversationalSystemPrompt = `You are WorkBench AI — a warm, helpful assistant for an electronics-parts marketplace in Sri Lanka. You help people find components (transistors, MOSFETs, IGBTs, capacitors, solar inverter parts, etc.), answer questions, and guide them. Be friendly, natural and concise, like a knowledgeable shop assistant. Use the conversation history for context. If the user seems to be looking for a part, invite them to name the part or type so you can search our shops. You can explain how WorkBench works: browse parts from many Sri Lankan shops, add them to a cart, and pay each shop directly via their LANKAQR. Never invent specific stock levels, prices or part numbers — if they want specifics, offer to look it up.`
 
         // 2. Check if AI wants to search
         try {
@@ -675,7 +685,7 @@ ai.post('/chat', async (c) => {
 
                     // Handle Empty Results - HARD STOP to prevent hallucinations
                     if (searchResults.length === 0) {
-                        content = `I searched our inventory for "${command.query}" but couldn't find any matching items. Please try a different search term or check the spelling.`;
+                        content = `I couldn't find anything matching "${cleanQuery}" in our shops right now. Try a different spelling or a broader term — or tell me what you're building and I'll suggest some options.`;
                     } else {
                         // 3. Format technical specifications from pre-extracted JSON
                         let technicalDetails = '';
@@ -805,11 +815,16 @@ ${memoryContext}
                             c.env.AI
                         );
                     }
+                } else {
+                    // A non-product command (CHAT / greeting / general question)
+                    // → answer naturally instead of forcing a product flow.
+                    content = await callAI(messages, conversationalSystemPrompt, c.env.GEMINI_API_KEY, false, [], c.env.AI);
                 }
             } else {
-                // Fallback if AI didn't return JSON (prevents hallucinations from Pass 1)
-                console.log('AI did not return JSON search command. Fallback.');
-                content = "I'm not sure which product you're asking about. Could you please specify the product name or type?";
+                // No JSON command at all → treat it as conversation, not a
+                // canned dead-end. This is the big "feels robotic" fix.
+                console.log('No JSON command; responding conversationally.');
+                content = await callAI(messages, conversationalSystemPrompt, c.env.GEMINI_API_KEY, false, [], c.env.AI);
             }
         } catch (e) {
             console.error('AI Search Logic Error:', e);

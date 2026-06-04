@@ -10,6 +10,7 @@ import PasswordResetRequest from './pages/PasswordResetRequest';
 import CartPage from './pages/CartPage';
 import Checkout from './pages/Checkout';
 import OrderConfirmation from './pages/OrderConfirmation';
+import TrackOrder from './pages/TrackOrder';
 
 const App: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -70,6 +71,16 @@ const App: React.FC = () => {
             }
           />
           <Route
+            path="/track"
+            element={
+              <>
+                <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+                <TrackOrder />
+                <Footer />
+              </>
+            }
+          />
+          <Route
             path="/join"
             element={
               <>
@@ -109,8 +120,8 @@ const Footer: React.FC = () => (
       <div>
         <h4 className="font-bold text-gray-900 mb-4">For Buyers</h4>
         <Link to="/" className="block mb-2 hover:text-brand-blue">Find Parts Nearby</Link>
-        <p className="mb-2">Verify Stock</p>
-        <p>Contact Sellers</p>
+        <Link to="/track" className="block mb-2 hover:text-brand-blue">Track Order</Link>
+        <Link to="/cart" className="block hover:text-brand-blue">View Cart</Link>
       </div>
       <div>
         <h4 className="font-bold text-gray-900 mb-4">For Sellers</h4>

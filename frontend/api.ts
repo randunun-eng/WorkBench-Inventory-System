@@ -283,6 +283,12 @@ export const api = {
     return await r.json();
   },
 
+  async lookupOrders(phone: string): Promise<any[]> {
+    const r = await fetch(`${API_BASE_URL}/api/orders/lookup?phone=${encodeURIComponent(phone)}`);
+    if (!r.ok) return [];
+    return await r.json();
+  },
+
   async getShopOrders(status?: string): Promise<any[]> {
     if (!this.token) return [];
     const q = status ? `?status=${encodeURIComponent(status)}` : '';
